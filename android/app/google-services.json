@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1057243873223",
+    "project_id": "springvault-c6f54",
+    "storage_bucket": "springvault-c6f54.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1057243873223:android:54b78d1a7de37295afe3e2",
+        "android_client_info": {
+          "package_name": "com.springvault"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBX_CR8aW1cuomKTA3Pc5Et-RsM64jbigU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1057243873223:android:3f047771906ff865afe3e2",
+        "android_client_info": {
+          "package_name": "com.springvaultemp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBX_CR8aW1cuomKTA3Pc5Et-RsM64jbigU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
