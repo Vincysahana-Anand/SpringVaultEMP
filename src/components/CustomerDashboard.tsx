@@ -158,10 +158,7 @@ export default function CustomerDashboard() {
 
   const tabButtonsConfig = [
     { icon: 'home', label: 'Home' },
-    { icon: 'shopping', label: 'Orders' },
-    { icon: 'calendar', label: 'Schedule' },
-    { icon: 'wallet', label: 'Earnings' },
-    { icon: 'help-circle', label: 'Support' },
+    { icon: 'account', label: 'User' },
   ];
 
   return (
@@ -178,7 +175,13 @@ export default function CustomerDashboard() {
           isActive: activeTab === tab.label,
         }))}
       >
-        <ScrollView style={styles.content} scrollEventThrottle={16}>
+        <ScrollView
+          style={styles.content}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={loadCustomerData} />
+          }
+        >
           {/* Welcome */}
           <Text style={styles.welcome}>Welcome, {userName}!</Text>
 

@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  BackHandler,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
@@ -19,6 +21,7 @@ import { getStocks } from '../services/stockService';
 import { getExpenses } from '../services/expenseService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
+import CustomersListScreen from './CustomersListScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -35,10 +38,25 @@ export default function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState('dashboard');
 
   useEffect(() => {
     fetchDashboardStats();
   }, []);
+
+  useEffect(() => {
+    const handleBackPress = () => {
+      if (currentScreen === 'customers') {
+        setCurrentScreen('dashboard');
+        setActiveTab('Home');
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => backHandler.remove();
+  }, [currentScreen]);
 
   const toggleDrawer = () => {
     setDrawerOpen(!drawerOpen);
@@ -99,11 +117,16 @@ export default function OwnerDashboard() {
 
   // Using shared MenuItem and TabButton
 
+  const handleNavigateToCustomers = () => {
+    setCurrentScreen('customers');
+    setDrawerOpen(false);
+  };
+
   const drawerMenuContent = (
     <>
       <Text style={styles.drawerTitle}>Menu</Text>
       <MenuItem icon="truck-check" label="Manage Deliveries" />
-      <MenuItem icon="account-group" label="Manage Customers" />
+      <MenuItem icon="account-group" label="Manage Customers" onPress={handleNavigateToCustomers} />
       <MenuItem icon="account-tie" label="Manage Employees" />
       <MenuItem icon="cash" label="Manage Expenses" />
       <MenuItem icon="water" label="Manage Stock" />
@@ -113,12 +136,21 @@ export default function OwnerDashboard() {
     </>
   );
 
+  const handleTabChange = (tabLabel: string) => {
+    setActiveTab(tabLabel);
+    if (tabLabel === 'Customers') {
+      setCurrentScreen('customers');
+    } else {
+      setCurrentScreen('dashboard');
+    }
+  };
+
   const tabButtonsConfig = [
     { icon: 'home', label: 'Home' },
     { icon: 'account-group', label: 'Customers' },
     { icon: 'truck', label: 'Deliveries' },
-    { icon: 'account-tie', label: 'Employees' },
-    { icon: 'chart-box', label: 'Reports' },
+    { icon: 'cash', label: 'Expense' },
+    { icon: 'water', label: 'Stock' },
   ];
 
   return (
@@ -129,13 +161,22 @@ export default function OwnerDashboard() {
         onDrawerToggle={toggleDrawer}
         drawerContent={drawerMenuContent}
         drawerLogo={logo}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         tabButtons={tabButtonsConfig.map((tab) => ({
           ...tab,
           isActive: activeTab === tab.label,
         }))}
       >
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {currentScreen === 'customers' ? (
+          <CustomersListScreen />
+        ) : (
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={loading} onRefresh={fetchDashboardStats} />
+            }
+          >
           {/* Welcome */}
           <Text style={styles.welcome}>Welcome, Admin!</Text>
 
@@ -188,6 +229,7 @@ export default function OwnerDashboard() {
 
           <View style={{ height: 40 }} />
         </ScrollView>
+        )}
       </DrawerLayout>
     </SafeAreaView>
   );

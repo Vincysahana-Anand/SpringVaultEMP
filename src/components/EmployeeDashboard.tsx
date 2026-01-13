@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  BackHandler,
+  RefreshControl,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +23,7 @@ import { MenuItem } from '../shared/components/MenuItem';
 import { EdgeIndicator } from '../shared/components/EdgeIndicator';
 import { currencyINR } from '../utils/format';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
+import CustomersListScreen from './CustomersListScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -36,6 +39,7 @@ export default function EmployeeDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [isAdmin, setIsAdmin] = useState(false);
   const [userName, setUserName] = useState('');
 
@@ -43,6 +47,20 @@ export default function EmployeeDashboard() {
     loadEmployeeData();
     fetchUserProfile();
   }, []);
+
+  useEffect(() => {
+    const handleBackPress = () => {
+      if (currentScreen === 'customers') {
+        setCurrentScreen('dashboard');
+        setActiveTab('Home');
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => backHandler.remove();
+  }, [currentScreen]);
 
   const fetchUserProfile = async () => {
     try {
@@ -119,6 +137,11 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const handleNavigateToCustomers = () => {
+    setCurrentScreen('customers');
+    setDrawerOpen(false);
+  };
+
   const drawerMenuContent = (
     <>
       <Text style={styles.drawerTitle}>Menu</Text>
@@ -126,6 +149,7 @@ export default function EmployeeDashboard() {
       <MenuItem icon="truck" label="My Deliveries" />
       <MenuItem icon="calendar" label="Schedule" />
       <MenuItem icon="wallet" label="Earnings" />
+      <MenuItem icon="account-group" label="View Customers" onPress={handleNavigateToCustomers} />
 
       {isAdmin && (
         <>
@@ -141,20 +165,22 @@ export default function EmployeeDashboard() {
     </>
   );
 
-  const tabButtonsConfig = isAdmin
-    ? [
-        { icon: 'home', label: 'Home' },
-        { icon: 'truck', label: 'Deliveries' },
-        { icon: 'calendar', label: 'Schedule' },
-        { icon: 'wallet', label: 'Earnings' },
-        { icon: 'cog', label: 'Admin' },
-      ]
-    : [
-        { icon: 'home', label: 'Home' },
-        { icon: 'truck', label: 'Deliveries' },
-        { icon: 'calendar', label: 'Schedule' },
-        { icon: 'wallet', label: 'Earnings' },
-      ];
+  const tabButtonsConfig = [
+    { icon: 'home', label: 'Home' },
+    { icon: 'account-group', label: 'Customers' },
+    { icon: 'truck', label: 'Deliveries' },
+    { icon: 'cash', label: 'Expense' },
+    { icon: 'water', label: 'Stock' },
+  ];
+
+  const handleTabChange = (tabLabel: string) => {
+    setActiveTab(tabLabel);
+    if (tabLabel === 'Customers') {
+      setCurrentScreen('customers');
+    } else {
+      setCurrentScreen('dashboard');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -164,13 +190,22 @@ export default function EmployeeDashboard() {
         onDrawerToggle={toggleDrawer}
         drawerContent={drawerMenuContent}
         drawerLogo={logo}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         tabButtons={tabButtonsConfig.map((tab) => ({
           ...tab,
           isActive: activeTab === tab.label,
         }))}
       >
-        <ScrollView style={styles.content} scrollEventThrottle={16}>
+        {currentScreen === 'customers' ? (
+          <CustomersListScreen />
+        ) : (
+          <ScrollView
+            style={styles.content}
+            scrollEventThrottle={16}
+            refreshControl={
+              <RefreshControl refreshing={loading} onRefresh={loadEmployeeData} />
+            }
+          >
           {/* Welcome */}
           <Text style={styles.welcome}>Welcome, {userName}</Text>
 
@@ -217,6 +252,7 @@ export default function EmployeeDashboard() {
 
           <View style={{ height: 40 }} />
         </ScrollView>
+        )}
       </DrawerLayout>
     </SafeAreaView>
   );
