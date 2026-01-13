@@ -1,14 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Animated,
-  PanResponder,
   TouchableOpacity,
-  Image,
-  Pressable,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,11 +13,18 @@ import { getFirestore, collection, query, where, getDocs, limit } from '@react-n
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getOrders } from '../services/orderService';
 import { getISTDate } from '../utils/dateUtils';
+import { StatCard } from '../shared/components/StatCard';
+import { MenuItem } from '../shared/components/MenuItem';
+import { EdgeIndicator } from '../shared/components/EdgeIndicator';
+import { ActionButton } from '../shared/components/ActionButton';
+import { SaleCard } from '../shared/components/SaleCard';
+import { getIconColor } from '../shared/icons/colorMap';
+import { currencyINR } from '../utils/format';
+import { DrawerLayout } from '../shared/layout/DrawerLayout';
+import { colors, spacing, elevation, typography, borderRadius } from '../shared/theme/theme';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-
-const DRAWER_WIDTH = 280;
 
 export default function CustomerDashboard() {
   const [stats, setStats] = useState({
@@ -42,8 +45,6 @@ export default function CustomerDashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userName, setUserName] = useState('');
   const [customerId, setCustomerId] = useState('');
-
-  const drawerAnimation = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
   useEffect(() => {
     loadCustomerData();
@@ -128,117 +129,12 @@ export default function CustomerDashboard() {
   };
 
   const toggleDrawer = () => {
-    Animated.spring(drawerAnimation, {
-      toValue: drawerOpen ? -DRAWER_WIDTH : 0,
-      useNativeDriver: true,
-      friction: 8,
-    }).start();
     setDrawerOpen(!drawerOpen);
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt, gestureState) => {
-        const { locationX } = evt.nativeEvent;
-        return locationX < 20 && !drawerOpen;
-      },
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dx > 0 && gestureState.dx <= DRAWER_WIDTH) {
-          drawerAnimation.setValue(-DRAWER_WIDTH + gestureState.dx);
-        } else if (drawerOpen && gestureState.dx < 0) {
-          const newValue = -gestureState.dx;
-          if (newValue <= DRAWER_WIDTH) {
-            drawerAnimation.setValue(-newValue);
-          }
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dx > DRAWER_WIDTH / 2) {
-          toggleDrawer();
-        } else if (drawerOpen && gestureState.dx < -DRAWER_WIDTH / 2) {
-          toggleDrawer();
-        } else {
-          Animated.spring(drawerAnimation, {
-            toValue: drawerOpen ? 0 : -DRAWER_WIDTH,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
+  // Using shared ActionButton and SaleCard components
 
-  const getIconColor = (icon: string) => {
-    const colorMap: Record<string, string> = {
-      'truck': '#3b82f6',
-      'water': '#06b6d4',
-      'wallet': '#10b981',
-      'clipboard-list': '#f59e0b',
-      'currency-inr': '#10b981',
-      'cash': '#10b981',
-      'credit-card': '#3b82f6',
-      'account': '#8b5cf6',
-      'cube': '#06b6d4',
-      'logout': '#ef4444',
-      'home': '#3b82f6',
-      'shopping': '#f59e0b',
-      'receipt': '#10b981',
-      'help-circle': '#8b5cf6',
-    };
-    return colorMap[icon] || '#6b7280';
-  };
-
-  const StatCard = ({ icon, label, value, subLabel, bgColor = '#fff' }: { icon: IconName; label: string; value: string | number; subLabel?: string; bgColor?: string }) => (
-    <View style={[styles.statCard, { backgroundColor: bgColor }]}>
-      <View style={styles.statContent}>
-        <MaterialCommunityIcons name={icon} size={20} color={getIconColor(icon)} style={styles.statIconStyle} />
-        <Text style={styles.statLabel}>{label}</Text>
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      {subLabel && <Text style={styles.subLabel}>{subLabel}</Text>}
-    </View>
-  );
-
-  const SaleCard = ({ label, value, color }: { label: string; value: number; color: string }) => (
-    <View style={styles.saleCard}>
-      <Text style={[styles.saleLabel, { color }]}>{label}</Text>
-      <Text style={styles.saleValue}>₹{value.toLocaleString()}</Text>
-    </View>
-  );
-
-  const ActionButton = ({ icon, label, primary }: { icon: IconName; label: string; primary?: boolean }) => (
-    <TouchableOpacity style={[styles.actionButton, primary && styles.actionButtonPrimary]}>
-      <MaterialCommunityIcons name={icon} size={24} color={primary ? '#fff' : getIconColor(icon)} />
-      <Text style={[styles.actionLabel, primary && styles.actionLabelPrimary]}>{label}</Text>
-      <MaterialCommunityIcons name="chevron-right" size={20} color={primary ? '#fff' : '#9ca3af'} />
-    </TouchableOpacity>
-  );
-
-  const MenuItem = ({ icon, label, onPress }: { icon: IconName; label: string; onPress?: () => void }) => (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress}>
-      <MaterialCommunityIcons name={icon} size={20} color={getIconColor(icon)} style={styles.menuIconStyle} />
-      <Text style={styles.menuLabel}>{label}</Text>
-      <MaterialCommunityIcons name="chevron-right" size={20} color="#9ca3af" />
-    </TouchableOpacity>
-  );
-
-  const TabButton = ({ icon, label, isActive }: { icon: IconName; label: string; isActive: boolean }) => (
-    <Pressable
-      onPress={() => setActiveTab(label)}
-      style={[styles.tabButton, isActive && styles.tabButtonActive]}
-    >
-      <MaterialCommunityIcons
-        name={icon}
-        size={22}
-        color={isActive ? '#0ea5b8' : '#6b7280'}
-      />
-      <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+  // Using shared MenuItem and TabButton
 
   const handleSignOut = async () => {
     try {
@@ -248,15 +144,40 @@ export default function CustomerDashboard() {
     }
   };
 
+  const drawerMenuContent = (
+    <>
+      <Text style={styles.drawerTitle}>Menu</Text>
+      <MenuItem icon="home" label="Dashboard" />
+      <MenuItem icon="water" label="Order Water" />
+      <MenuItem icon="clipboard-text" label="My Orders" />
+      <MenuItem icon="wallet" label="My Payments" />
+      <MenuItem icon="help-circle" label="Support" />
+      <MenuItem icon="logout" label="Sign Out" onPress={handleSignOut} />
+    </>
+  );
+
+  const tabButtonsConfig = [
+    { icon: 'home', label: 'Home' },
+    { icon: 'shopping', label: 'Orders' },
+    { icon: 'calendar', label: 'Schedule' },
+    { icon: 'wallet', label: 'Earnings' },
+    { icon: 'help-circle', label: 'Support' },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
-      <View {...panResponder.panHandlers} style={styles.container}>
-        {/* Edge Indicator */}
-        <View style={styles.edgeIndicator}>
-          <View style={styles.edgeBar} />
-        </View>
-
-        {/* Content */}
+      <EdgeIndicator />
+      <DrawerLayout
+        drawerOpen={drawerOpen}
+        onDrawerToggle={toggleDrawer}
+        drawerContent={drawerMenuContent}
+        drawerLogo={logo}
+        onTabChange={setActiveTab}
+        tabButtons={tabButtonsConfig.map((tab) => ({
+          ...tab,
+          isActive: activeTab === tab.label,
+        }))}
+      >
         <ScrollView style={styles.content} scrollEventThrottle={16}>
           {/* Welcome */}
           <Text style={styles.welcome}>Welcome, {userName}!</Text>
@@ -279,7 +200,7 @@ export default function CustomerDashboard() {
               <StatCard
                 icon="wallet"
                 label="Account Balance"
-                value={`₹${stats.accountBalance.toLocaleString()}`}
+                value={currencyINR(stats.accountBalance)}
                 bgColor="#f0fdf4"
               />
               <StatCard
@@ -299,13 +220,13 @@ export default function CustomerDashboard() {
             </View>
 
             <View style={styles.salesGrid}>
-              <SaleCard label="Cash Sale" value={sales.cashSale} color="#10b981" />
-              <SaleCard label="Online Sale" value={sales.onlineSale} color="#3b82f6" />
+              <SaleCard label="Cash Sale" value={sales.cashSale} color={colors.success[700]} />
+              <SaleCard label="Online Sale" value={sales.onlineSale} color={colors.info[500]} />
             </View>
 
             <View style={styles.salesGrid}>
-              <SaleCard label="Account Sale" value={sales.accountSale} color="#8b5cf6" />
-              <SaleCard label="Expense" value={sales.expense} color="#f59e0b" />
+              <SaleCard label="Account Sale" value={sales.accountSale} color={colors.purple[500]} />
+              <SaleCard label="Expense" value={sales.expense} color={colors.warning[500]} />
             </View>
           </View>
 
@@ -315,7 +236,7 @@ export default function CustomerDashboard() {
               <MaterialCommunityIcons name="cash-multiple" size={24} color="#10b981" />
               <Text style={styles.balanceTitle}>Today's Balance</Text>
             </View>
-            <Text style={styles.balanceValue}>₹{todayBalance.toLocaleString()}</Text>
+            <Text style={styles.balanceValue}>{currencyINR(todayBalance)}</Text>
           </View>
 
           {/* Action Buttons */}
@@ -328,47 +249,7 @@ export default function CustomerDashboard() {
 
           <View style={{ height: 40 }} />
         </ScrollView>
-
-        {/* Drawer Menu */}
-        <Animated.View
-          style={[
-            styles.drawer,
-            { transform: [{ translateX: drawerAnimation }] },
-          ]}
-        >
-          <View style={styles.drawerHeader}>
-            <Image source={logo} style={styles.drawerLogo} resizeMode="contain" />
-          </View>
-
-          <ScrollView style={styles.drawerContent}>
-            <Text style={styles.drawerTitle}>Menu</Text>
-            <MenuItem icon="home" label="Dashboard" />
-            <MenuItem icon="water" label="Order Water" />
-            <MenuItem icon="clipboard-text" label="My Orders" />
-            <MenuItem icon="wallet" label="My Payments" />
-            <MenuItem icon="help-circle" label="Support" />
-            <MenuItem icon="logout" label="Sign Out" onPress={handleSignOut} />
-          </ScrollView>
-        </Animated.View>
-
-        {/* Drawer Overlay */}
-        {drawerOpen && (
-          <TouchableOpacity
-            style={styles.overlay}
-            activeOpacity={1}
-            onPress={toggleDrawer}
-          />
-        )}
-
-        {/* Bottom Tab Navigation */}
-        <View style={styles.tabBar}>
-          <TabButton icon="home" label="Home" isActive={activeTab === 'Home'} />
-          <TabButton icon="shopping" label="Orders" isActive={activeTab === 'Orders'} />
-          <TabButton icon="calendar" label="Schedule" isActive={activeTab === 'Schedule'} />
-          <TabButton icon="wallet" label="Earnings" isActive={activeTab === 'Earnings'} />
-          <TabButton icon="help-circle" label="Support" isActive={activeTab === 'Support'} />
-        </View>
-      </View>
+      </DrawerLayout>
     </SafeAreaView>
   );
 }
@@ -376,277 +257,106 @@ export default function CustomerDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafbfc',
-  },
-  edgeIndicator: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 20,
-    zIndex: 10,
-    justifyContent: 'center',
-  },
-  edgeBar: {
-    width: 4,
-    height: 40,
-    backgroundColor: '#06b6d4',
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
+    backgroundColor: colors.bg.light,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: spacing[16],
+    paddingTop: spacing[16],
   },
   welcome: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 20,
+    fontSize: typography.fontSize['3xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[800],
+    marginBottom: spacing[20],
   },
   statsGrid: {
-    marginBottom: 16,
+    marginBottom: spacing[16],
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  statContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  statIconStyle: {
-    marginRight: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '500',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  subLabel: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 4,
+    gap: spacing[12],
+    marginBottom: spacing[12],
   },
   expenseSection: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.bg.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing[16],
+    marginBottom: spacing[16],
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: colors.border,
+    ...elevation.sm,
   },
   expenseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: spacing[8],
+    marginBottom: spacing[16],
   },
   expenseTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[800],
   },
   salesGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    gap: spacing[12],
+    marginBottom: spacing[12],
   },
   saleCard: {
     flex: 1,
-    padding: 12,
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
+    padding: spacing[12],
+    backgroundColor: colors.gray[100],
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.border,
   },
   saleLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 8,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing[8],
   },
   saleValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1f2937',
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[800],
   },
   balanceCard: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.success[50],
+    borderRadius: borderRadius.lg,
+    padding: spacing[16],
+    marginBottom: spacing[16],
     borderWidth: 1,
-    borderColor: '#10b981',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: colors.success[700],
+    ...elevation.sm,
   },
   balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: spacing[8],
+    marginBottom: spacing[12],
   },
   balanceTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#059669',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
   },
   balanceValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#059669',
+    fontSize: typography.fontSize['5xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
   },
   actionsSection: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  actionButtonPrimary: {
-    backgroundColor: '#06b6d4',
-    borderColor: '#06b6d4',
-  },
-  actionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-    flex: 1,
-  },
-  actionLabelPrimary: {
-    color: '#fff',
-  },
-  drawer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: DRAWER_WIDTH,
-    backgroundColor: '#fff',
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 16,
-  },
-  drawerHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    justifyContent: 'flex-start',
-  },
-  drawerLogo: {
-    height: 50,
-    width: 50,
-  },
-  drawerContent: {
-    paddingVertical: 12,
+    gap: spacing[12],
+    marginBottom: spacing[16],
   },
   drawerTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6b7280',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[500],
     textTransform: 'uppercase',
-    paddingHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  menuIconStyle: {
-    width: 20,
-  },
-  menuLabel: {
-    fontSize: 14,
-    color: '#1f2937',
-    fontWeight: '500',
-    flex: 1,
-  },
-  overlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    zIndex: 15,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    gap: 4,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  tabButtonActive: {
-    backgroundColor: '#cffafe',
-  },
-  tabLabel: {
-    fontSize: 10,
-    color: '#6b7280',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: '#0ea5b8',
-    fontWeight: '600',
+    paddingHorizontal: spacing[20],
+    marginTop: spacing[12],
+    marginBottom: spacing[8],
   },
 });
