@@ -22,6 +22,7 @@ import { getExpenses } from '../services/expenseService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
+import DeliveriesScreen from './DeliveriesScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -46,7 +47,7 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     const handleBackPress = () => {
-      if (currentScreen === 'customers') {
+      if (currentScreen === 'customers' || currentScreen === 'deliveries') {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
         return true;
@@ -140,6 +141,8 @@ export default function OwnerDashboard() {
     setActiveTab(tabLabel);
     if (tabLabel === 'Customers') {
       setCurrentScreen('customers');
+    } else if (tabLabel === 'Deliveries') {
+      setCurrentScreen('deliveries');
     } else {
       setCurrentScreen('dashboard');
     }
@@ -169,6 +172,8 @@ export default function OwnerDashboard() {
       >
         {currentScreen === 'customers' ? (
           <CustomersListScreen />
+        ) : currentScreen === 'deliveries' ? (
+          <DeliveriesScreen userRole="owner" isAdmin={true} />
         ) : (
           <ScrollView
             style={styles.content}

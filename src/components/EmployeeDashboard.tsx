@@ -24,6 +24,7 @@ import { EdgeIndicator } from '../shared/components/EdgeIndicator';
 import { currencyINR } from '../utils/format';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
+import DeliveriesScreen from './DeliveriesScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -50,7 +51,7 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     const handleBackPress = () => {
-      if (currentScreen === 'customers') {
+      if (currentScreen === 'customers' || currentScreen === 'deliveries') {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
         return true;
@@ -177,6 +178,8 @@ export default function EmployeeDashboard() {
     setActiveTab(tabLabel);
     if (tabLabel === 'Customers') {
       setCurrentScreen('customers');
+    } else if (tabLabel === 'Deliveries') {
+      setCurrentScreen('deliveries');
     } else {
       setCurrentScreen('dashboard');
     }
@@ -198,6 +201,8 @@ export default function EmployeeDashboard() {
       >
         {currentScreen === 'customers' ? (
           <CustomersListScreen />
+        ) : currentScreen === 'deliveries' ? (
+          <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
         ) : (
           <ScrollView
             style={styles.content}
