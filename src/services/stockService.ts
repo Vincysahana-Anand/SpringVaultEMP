@@ -7,6 +7,7 @@ export interface Stock {
   quantity: number;
   empty?: number; // Only for 20L can & party can
   total?: number; // Optional, can be used for total stock
+  extraCan?: number;
 }
 
 // ✅ Fetch all stocks

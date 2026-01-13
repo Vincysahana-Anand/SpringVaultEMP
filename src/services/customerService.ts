@@ -17,6 +17,7 @@ export interface Customer {
   price: number;
   canHolding: number;
   extraCanHolding?: number;
+  balance?: number;
 }
 
 export const getCustomers = async (): Promise<Customer[] | ServiceError> => {

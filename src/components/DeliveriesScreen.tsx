@@ -17,10 +17,13 @@ import {
   Platform,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { getOrders, Order, updateOrder, deleteOrder } from '../services/orderService';
-import { getStocks, Stock } from '../services/stockService';
-import { getCustomers, Customer } from '../services/customerService';
+import { getOrders, Order, addOrder, updateOrder, deleteOrder } from '../services/orderService';
+import { getStocks, Stock, updateStock } from '../services/stockService';
+import { getCustomers, Customer, updateCustomer } from '../services/customerService';
+import { addPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
+import { updateSalesRecord } from '../services/salesService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
 import DropletLoader from './DropletLoader';
 
@@ -43,6 +46,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [fullBottlesDelivered, setFullBottlesDelivered] = useState('0');
   const [emptyBottlesCollected, setEmptyBottlesCollected] = useState('0');
   const [amountPaid, setAmountPaid] = useState('0');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const [paymentRef, setPaymentRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -52,15 +57,44 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [, setLoadingCustomers] = useState(false);
+  const [selectedCustomerData, setSelectedCustomerData] = useState<Customer | null>(null);
 
   useEffect(() => {
     loadOrders();
     loadProducts();
+    loadCustomers();
   }, []);
 
   useEffect(() => {
     filterOrders();
   }, [searchQuery, orders, activeTab]);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      const customer = customers.find((c) => c.id === selectedOrder.customerId) || null;
+      setSelectedCustomerData(customer);
+    } else {
+      setSelectedCustomerData(null);
+    }
+  }, [selectedOrder, customers]);
+
+  const parsedFullBottlesForBill = parseInt(fullBottlesDelivered || '0', 10) || 0;
+  const billCustomerBalance = Number(selectedCustomerData?.balance ?? 0) || 0;
+  const billCustomerPrice = Number(selectedCustomerData?.price ?? 0) || 0;
+  const billAmount = billCustomerBalance + billCustomerPrice * parsedFullBottlesForBill;
+  
+  // Debug bill calculation
+  if (showDeliveryModal && parsedFullBottlesForBill > 0) {
+    console.log('Bill calculation debug:', {
+      parsedFullBottlesForBill,
+      billCustomerBalance,
+      billCustomerPrice,
+      billAmount,
+      calculated: billCustomerBalance + billCustomerPrice * parsedFullBottlesForBill,
+    });
+  }
 
   const loadOrders = async () => {
     try {
@@ -107,13 +141,34 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     setFilteredOrders(filtered);
   };
 
-  const handleCompleteDelivery = (order: Order) => {
+  const handleCompleteDelivery = async (order: Order) => {
     if (!order.id) return;
     setSelectedOrder(order);
     setFullBottlesDelivered(order.quantity?.toString() || '0');
     setEmptyBottlesCollected('0');
     setAmountPaid('0');
+    setPaymentMethod('cash');
+    setPaymentRef('');
     setShowDeliveryModal(true);
+
+    // Always fetch the latest customer data (including balance/price) for billing display
+    try {
+      const customersResult = await getCustomers();
+      if (Array.isArray(customersResult)) {
+        setCustomers(customersResult);
+        const found = customersResult.find((c) => c.id === order.customerId) || null;
+        setSelectedCustomerData(found);
+        console.log('Customer data loaded for billing:', {
+          name: found?.name,
+          balance: found?.balance,
+          price: found?.price,
+        });
+      } else {
+        handleServiceError(customersResult, 'getCustomers');
+      }
+    } catch (error) {
+      handleServiceError(error, 'loadCustomerForModal');
+    }
   };
 
   const handleCloseDeliveryModal = () => {
@@ -122,6 +177,9 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     setFullBottlesDelivered('0');
     setEmptyBottlesCollected('0');
     setAmountPaid('0');
+    setPaymentMethod('cash');
+    setPaymentRef('');
+    setSelectedCustomerData(null);
   };
 
   const handleSubmitDelivery = async () => {
@@ -134,24 +192,39 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       return;
     }
 
-    // Calculate can holding delta (20L cans in customer possession)
-    const emptyBottles = parseInt(emptyBottlesCollected || '0', 10) || 0;
-    const amountPaidValue = parseInt(amountPaid || '0', 10) || 0;
-    
-    // Fetch customer data to get canHolding and extraCanHolding
-    const customersResult = await getCustomers();
-    if (!Array.isArray(customersResult)) {
-      handleServiceError(customersResult, 'getCustomers');
-      setSubmitting(false);
+    // If online payment, ensure reference is provided
+    if (paymentMethod === 'online' && !paymentRef.trim()) {
+      Alert.alert('Validation Error', 'Please enter UTR / UPI Transaction ID for online payments', [{ text: 'OK' }]);
       return;
     }
+
+    // Calculate can holding delta (20L cans in customer possession)
+    const emptyBottles = Math.max(0, parseInt(emptyBottlesCollected?.trim() || '0', 10) || 0);
+    const amountPaidValue = Math.max(0, parseInt(amountPaid?.trim() || '0', 10) || 0);
     
-    const customer = customersResult.find(c => c.id === selectedOrder.customerId);
+    // Fetch customer data to get canHolding, extraCanHolding, price, and balance
+    let customer = customers.find((c) => c.id === selectedOrder.customerId);
+    if (!customer) {
+      const customersResult = await getCustomers();
+      if (!Array.isArray(customersResult)) {
+        handleServiceError(customersResult, 'getCustomers');
+        setSubmitting(false);
+        return;
+      }
+      setCustomers(customersResult);
+      customer = customersResult.find((c) => c.id === selectedOrder.customerId);
+    }
+    
     if (!customer) {
       Alert.alert('Error', 'Customer not found', [{ text: 'OK' }]);
       setSubmitting(false);
       return;
     }
+    
+    const customerBalance = Number(customer.balance ?? 0) || 0;
+    const customerPrice = Number(customer.price ?? 0) || 0;
+    const billAmountValue = customerBalance + customerPrice * fullBottles;
+    const newCustomerBalance = billAmountValue - amountPaidValue;
     
     // canHolding: number of cans customer SHOULD have
     // extraCanHolding: number of EXTRA cans customer is currently holding
@@ -179,17 +252,226 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       amountPaid: amountPaidValue,
     });
 
+    console.log('Billing calculation', {
+      customerName: selectedOrder.customerName,
+      customerBalance,
+      customerPrice,
+      fullBottlesDelivered: fullBottles,
+      billAmount: billAmountValue,
+      amountPaid: amountPaidValue,
+      newCustomerBalance,
+    });
+
+    // Fetch stock details for the product
+    const currentStock = products.find((p: Stock) => p.id === selectedOrder.productId);
+    if (!currentStock) {
+      Alert.alert('Error', 'Stock not found for this product', [{ text: 'OK' }]);
+      setSubmitting(false);
+      return;
+    }
+
+    // Calculate new stock values
+    const currentQuantity = currentStock.quantity || 0;
+    const currentEmpty = currentStock.empty || 0;
+    const currentExtraCan = currentStock.extraCan || 0;
+    
+    // Stock calculation logic:
+    // 1. Quantity: reduce by full bottles delivered
+    const newQuantity = currentQuantity - fullBottles;
+    
+    // 2. Empty: increase by empty bottles collected
+    const newEmpty = currentEmpty + emptyBottles;
+    
+    // 3. ExtraCan: increase by full bottles delivered, decrease by empty bottles collected
+    const newStockExtraCan = currentExtraCan + fullBottles - emptyBottles;
+
+    console.log('Stock update calculation', {
+      productName: currentStock.productName,
+      currentQuantity: currentQuantity,
+      currentEmpty: currentEmpty,
+      currentExtraCan: currentExtraCan,
+      fullBottlesDelivered: fullBottles,
+      emptyBottlesCollected: emptyBottles,
+      newQuantity: newQuantity,
+      newEmpty: newEmpty,
+      newStockExtraCan: newStockExtraCan,
+    });
+
     try {
       setSubmitting(true);
-      // Delete the order from collection (temporarily disabled)
-      // await deleteOrder(selectedOrder.id);
-      // setOrders(orders.filter((o) => o.id !== selectedOrder.id));
+      console.log('Starting delivery submission...');
       
+      // Step 1: Update customer balance and extra can holding
+      console.log('Step 1: Updating customer...');
+      const updateCustomerResult = await updateCustomer(customer.id!, {
+        balance: newCustomerBalance,
+        extraCanHolding: newExtraCanHolding,
+      });
+      if (updateCustomerResult !== true) {
+        console.error('Customer update failed:', updateCustomerResult);
+        handleServiceError(updateCustomerResult, 'updateCustomer');
+        setSubmitting(false);
+        return;
+      }
+      console.log('Customer updated successfully');
+
+      // Step 2: Update stock
+      console.log('Step 2: Updating stock...');
+      const updateStockResult = await updateStock(currentStock.id!, {
+        quantity: newQuantity,
+        empty: newEmpty,
+        extraCan: newStockExtraCan,
+      });
+      if (updateStockResult !== true) {
+        console.error('Stock update failed:', updateStockResult);
+        handleServiceError(updateStockResult, 'updateStock');
+        setSubmitting(false);
+        return;
+      }
+      console.log('Stock updated successfully');
+
+      // Step 3: Save purchase history
+      console.log('Step 3: Saving purchase history...');
+      const deliveredDate = getISTDate();
+      const formattedDeliveredDate = deliveredDate.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+      const purchaseRecord: PurchaseRecord = {
+        product: selectedOrder.productName,
+        deliveredQty: fullBottles,
+        emptyQty: emptyBottles,
+        orderedAt: selectedOrder.orderedAt || new Date(selectedOrder.timeStamp || 0).toISOString(),
+        deliveredAt: formattedDeliveredDate,
+        billAmount: billAmountValue,
+        amountPaid: amountPaidValue,
+        paymentMethod: paymentMethod,
+        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef, 10) : undefined
+      };
+
+      console.log('Purchase record to save:', purchaseRecord);
+
+      const purchaseHistoryResult = await addPurchaseHistory(customer.id!, purchaseRecord);
+      if (purchaseHistoryResult !== true) {
+        console.error('Purchase history save failed:', purchaseHistoryResult);
+        handleServiceError(purchaseHistoryResult, 'addPurchaseHistory');
+        setSubmitting(false);
+        return;
+      }
+
+      // Step 4: Handle remaining quantity and delete original order
+      const originalOrderQuantity = Number(selectedOrder.quantity || 0);
+      const remainingQuantity = Math.max(originalOrderQuantity - fullBottles, 0);
+
+      if (remainingQuantity > 0 && fullBottles < originalOrderQuantity) {
+        console.log('Partial delivery detected. Creating new order for remaining quantity:', remainingQuantity);
+        const newOrderTimestamp = getISTDate();
+        const formattedNewOrderedAt = newOrderTimestamp.toLocaleString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+
+        const newOrderPayload: Order = {
+          customerId: selectedOrder.customerId,
+          customerName: selectedOrder.customerName,
+          productId: selectedOrder.productId,
+          productName: selectedOrder.productName,
+          quantity: remainingQuantity,
+          paymentMethod: selectedOrder.paymentMethod || 'Pending',
+          amountPaid: 0,
+          orderedAt: formattedNewOrderedAt,
+          address: selectedOrder.address,
+          mobile: selectedOrder.mobile,
+          timeStamp: newOrderTimestamp,
+        };
+
+        const addOrderResult = await addOrder(newOrderPayload);
+        if (addOrderResult !== true) {
+          console.error('Creating remaining-quantity order failed:', addOrderResult);
+          handleServiceError(addOrderResult, 'addOrder');
+          setSubmitting(false);
+          return;
+        }
+        console.log('Remaining-quantity order created successfully');
+      }
+
+      // Step 5: Update sales record
+      console.log('Step 5: Updating sales record...');
+      const isDeliveredCan = !!(selectedOrder.productName && 
+        selectedOrder.productName.toLowerCase().includes('20') && 
+        selectedOrder.productName.toLowerCase().includes('liter'));
+      
+      const saleAmount = customerPrice * fullBottles;
+      const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaidValue) : 0;
+      const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaidValue) : 0;
+      
+      console.log('Sales values before update:', {
+        fullBottles: Number(fullBottles),
+        emptyBottles: Number(emptyBottles),
+        cashPaidValue: Number(cashPaidValue),
+        onlinePaidValue: Number(onlinePaidValue),
+        billAmountValue: Number(billAmountValue),
+        saleAmount: Number(saleAmount),
+        paymentMethod,
+      });
+      
+      const salesUpdateResult = await updateSalesRecord(
+        Number(fullBottles),
+        Number(emptyBottles),
+        Number(cashPaidValue),
+        Number(onlinePaidValue),
+        Number(billAmountValue),
+        isDeliveredCan,
+        Number(saleAmount)
+      );
+      if (salesUpdateResult !== true) {
+        console.error('Sales record update failed:', salesUpdateResult);
+        handleServiceError(salesUpdateResult, 'updateSalesRecord');
+        setSubmitting(false);
+        return;
+      }
+      console.log('Sales record updated successfully');
+
+      console.log('Deleting original order...');
+      const deleteResult = await deleteOrder(selectedOrder.id!);
+      if (deleteResult !== true) {
+        console.error('Deleting original order failed:', deleteResult);
+        handleServiceError(deleteResult, 'deleteOrder');
+        setSubmitting(false);
+        return;
+      }
+      console.log('Original order deleted');
+
+      // Refresh local orders to reflect deletion/new order
+      await loadOrders();
+
+      console.log('✅ All updates completed successfully:', {
+        customer: customer.id,
+        balance: newCustomerBalance,
+        extraCanHolding: newExtraCanHolding,
+        stock: currentStock.id,
+        newQuantity,
+        newEmpty,
+        newStockExtraCan,
+        purchaseRecord,
+        remainingQuantity,
+        salesUpdated: true,
+      });
+
+      setSubmitting(false);
       handleCloseDeliveryModal();
       Alert.alert('Success', 'Delivery completed successfully', [{ text: 'OK' }]);
     } catch (error) {
+      console.error('Error in handleSubmitDelivery:', error);
       handleServiceError(error, 'completeDelivery');
-    } finally {
       setSubmitting(false);
     }
   };
@@ -207,6 +489,22 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       handleServiceError(error, 'loadProducts');
     } finally {
       setLoadingProducts(false);
+    }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      setLoadingCustomers(true);
+      const result = await getCustomers();
+      if (Array.isArray(result)) {
+        setCustomers(result);
+      } else {
+        handleServiceError(result, 'getCustomers');
+      }
+    } catch (error) {
+      handleServiceError(error, 'loadCustomers');
+    } finally {
+      setLoadingCustomers(false);
     }
   };
 
@@ -539,28 +837,62 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                       />
                     </View>
 
-                    {/* Empty Bottles Collected */}
+                    {/* Empty Bottles Collected - Only for 20L cans */}
+                    {selectedOrder.productName && 
+                      selectedOrder.productName.toLowerCase().includes('20') && 
+                      selectedOrder.productName.toLowerCase().includes('liter') && (
+                      <View style={styles.formGroup}>
+                        <Text style={styles.modalLabel}>Empty Water Bottles Collected</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          placeholder="0"
+                          placeholderTextColor={colors.gray[400]}
+                          value={emptyBottlesCollected}
+                          onChangeText={setEmptyBottlesCollected}
+                          onFocus={() => {
+                            if (emptyBottlesCollected === '0') {
+                              setEmptyBottlesCollected('');
+                            }
+                          }}
+                          onBlur={() => {
+                            if (emptyBottlesCollected.trim() === '') {
+                              setEmptyBottlesCollected('0');
+                            }
+                          }}
+                          keyboardType="number-pad"
+                          editable={!submitting}
+                        />
+                      </View>
+                    )}
+
+                    {selectedCustomerData && (
+                      <View style={styles.billAmountRow}>
+                        <Text style={styles.billAmountLabel}>Bill Amount</Text>
+                        <Text style={styles.billAmountValue}>
+                          Rs {parsedFullBottlesForBill > 0 ? billAmount : billCustomerBalance}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Payment Method */}
                     <View style={styles.formGroup}>
-                      <Text style={styles.modalLabel}>Empty Water Bottles Collected</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="0"
-                        placeholderTextColor={colors.gray[400]}
-                        value={emptyBottlesCollected}
-                        onChangeText={setEmptyBottlesCollected}
-                        onFocus={() => {
-                          if (emptyBottlesCollected === '0') {
-                            setEmptyBottlesCollected('');
-                          }
-                        }}
-                        onBlur={() => {
-                          if (emptyBottlesCollected.trim() === '') {
-                            setEmptyBottlesCollected('0');
-                          }
-                        }}
-                        keyboardType="number-pad"
-                        editable={!submitting}
-                      />
+                      <Text style={styles.modalLabel}>Payment Method</Text>
+                      <View style={styles.paymentMethodContainer}>
+                        <TouchableOpacity
+                          style={[styles.paymentMethodButton, paymentMethod === 'cash' && styles.paymentMethodButtonActive]}
+                          onPress={() => setPaymentMethod('cash')}
+                          disabled={submitting}
+                        >
+                          <Text style={[styles.paymentMethodText, paymentMethod === 'cash' && styles.paymentMethodTextActive]}>Cash</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.paymentMethodButton, paymentMethod === 'online' && styles.paymentMethodButtonActive]}
+                          onPress={() => setPaymentMethod('online')}
+                          disabled={submitting}
+                        >
+                          <Text style={[styles.paymentMethodText, paymentMethod === 'online' && styles.paymentMethodTextActive]}>Online</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
                     {/* Amount Paid */}
@@ -586,6 +918,22 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                         editable={!submitting}
                       />
                     </View>
+
+                    {/* UTR / UPI Transaction ID for online payments */}
+                    {paymentMethod === 'online' && (
+                      <View style={styles.formGroup}>
+                        <Text style={styles.modalLabel}>UTR / UPI Transaction ID *</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          placeholder="Enter UTR / UPI Transaction ID"
+                          placeholderTextColor={colors.gray[400]}
+                          value={paymentRef}
+                          onChangeText={(text) => setPaymentRef(text.replace(/[^0-9]/g, ''))}
+                          editable={!submitting}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                    )}
 
                     {/* Submit Button */}
                     <TouchableOpacity
@@ -918,20 +1266,20 @@ const styles = StyleSheet.create({
     maxHeight: '100%',
   },
   modalScrollContent: {
-    paddingHorizontal: spacing[20],
-    paddingVertical: spacing[20],
+    paddingHorizontal: spacing[14],
+    paddingVertical: spacing[10],
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing[20],
-    paddingVertical: spacing[16],
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[12],
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitle: {
-    fontSize: typography.fontSize['xl'],
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.gray[800],
   },
@@ -940,28 +1288,28 @@ const styles = StyleSheet.create({
   },
   customerInfoSection: {
     backgroundColor: colors.bg.light,
-    padding: spacing[12],
+    padding: spacing[6],
     borderRadius: borderRadius.md,
-    marginBottom: spacing[20],
+    marginBottom: spacing[8],
   },
   customerNameModal: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.gray[800],
-    marginBottom: spacing[4],
+    marginBottom: spacing[2],
   },
   productInfoModal: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
     color: colors.gray[600],
   },
   productBadgeContainer: {
-    marginTop: spacing[8],
+    marginTop: spacing[4],
   },
   productBadge: {
     backgroundColor: colors.primary[500],
     borderRadius: borderRadius.md,
-    paddingVertical: spacing[6],
-    paddingHorizontal: spacing[12],
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[10],
     alignSelf: 'flex-start',
   },
   productBadgeText: {
@@ -970,27 +1318,43 @@ const styles = StyleSheet.create({
     color: colors.bg.white,
   },
   formGroup: {
-    marginBottom: spacing[16],
+    marginBottom: spacing[8],
   },
   modalLabel: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.gray[800],
-    marginBottom: spacing[8],
+    marginBottom: spacing[2],
   },
   modalInput: {
     backgroundColor: colors.bg.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[12],
-    paddingVertical: spacing[10],
-    fontSize: typography.fontSize.base,
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[4],
+    fontSize: typography.fontSize.sm,
     color: colors.gray[800],
+  },
+  billAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[8],
+  },
+  billAmountLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[700],
+  },
+  billAmountValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
   },
   submitButton: {
     backgroundColor: colors.primary[500],
-    paddingVertical: spacing[12],
+    paddingVertical: spacing[10],
     borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1000,7 +1364,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.bg.white,
   },
@@ -1061,7 +1425,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingVertical: spacing[10],
+    paddingVertical: spacing[8],
     alignItems: 'center',
     justifyContent: 'center',
   },
