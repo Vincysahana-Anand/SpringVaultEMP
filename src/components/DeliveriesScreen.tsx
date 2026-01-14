@@ -22,6 +22,7 @@ import { getStocks, Stock, updateStock } from '../services/stockService';
 import { getCustomers, Customer, updateCustomer } from '../services/customerService';
 import { addPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
 import { updateSalesRecord } from '../services/salesService';
+import { addDailyRecord, getDailyRecordsByDate, DailyRecordEntry } from '../services/dailyRecordService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
@@ -60,12 +61,17 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [, setLoadingCustomers] = useState(false);
   const [selectedCustomerData, setSelectedCustomerData] = useState<Customer | null>(null);
+  const [completedDeliveries, setCompletedDeliveries] = useState<DailyRecordEntry[]>([]);
+  const [selectedCompletedDelivery, setSelectedCompletedDelivery] = useState<DailyRecordEntry | null>(null);
 
   useEffect(() => {
     loadOrders();
     loadProducts();
     loadCustomers();
-  }, []);
+    if (activeTab === 'delivered') {
+      loadCompletedDeliveries();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     filterOrders();
@@ -453,6 +459,37 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       }
       console.log('Sales record updated successfully');
 
+      // Step 6: Add to daily record before deleting
+      console.log('Step 6: Adding to daily record...');
+      // Build daily record entry (exclude undefined values for Firebase compatibility)
+      const dailyRecordEntry: DailyRecordEntry = {
+        customerId: customer.id || '',
+        customerName: selectedOrder.customerName,
+        customerAddress: selectedOrder.address,
+        customerMobile: selectedOrder.mobile,
+        product: selectedOrder.productName,
+        orderedAt: selectedOrder.orderedAt || '',
+        deliveredAt: formattedDeliveredDate,
+        orderedQty: selectedOrder.quantity || 0,
+        deliveredQty: fullBottles,
+        emptyQty: emptyBottles,
+        billAmount: billAmountValue,
+        saleAmount: saleAmount,
+        amountPaid: amountPaidValue,
+        paymentMethod: paymentMethod,
+        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef, 10) || 0 : 0,
+        pendingPaymentReceived: pendingPaymentReceived,
+      };
+      
+      const dailyRecordResult = await addDailyRecord(selectedOrder.productId || '', dailyRecordEntry);
+      if (dailyRecordResult !== true) {
+        console.error('Daily record save failed:', dailyRecordResult);
+        handleServiceError(dailyRecordResult, 'addDailyRecord');
+        setSubmitting(false);
+        return;
+      }
+      console.log('Daily record added successfully');
+
       console.log('Deleting original order...');
       const deleteResult = await deleteOrder(selectedOrder.id!);
       if (deleteResult !== true) {
@@ -518,6 +555,29 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       handleServiceError(error, 'loadCustomers');
     } finally {
       setLoadingCustomers(false);
+    }
+  };
+
+  const loadCompletedDeliveries = async () => {
+    try {
+      const today = getISTDate();
+      // Format date as yyyy-MM-dd
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      const result = await getDailyRecordsByDate(dateStr);
+      if (Array.isArray(result)) {
+        // Reverse to show latest first
+        setCompletedDeliveries([...result].reverse());
+      } else {
+        handleServiceError(result, 'getDailyRecordsByDate');
+        setCompletedDeliveries([]);
+      }
+    } catch (error) {
+      handleServiceError(error, 'loadCompletedDeliveries');
+      setCompletedDeliveries([]);
     }
   };
 
@@ -724,16 +784,173 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     </View>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <DropletLoader visible={true} />
+  const renderCompletedCard = ({ item }: { item: DailyRecordEntry }) => (
+    <TouchableOpacity
+      style={styles.deliveryCard}
+      onPress={() => setSelectedCompletedDelivery(item)}
+      activeOpacity={0.7}
+    >
+      {/* Customer Info */}
+      <View style={styles.cardHeader}>
+        <View style={styles.customerInfo}>
+          <Text style={styles.customerName}>{item.customerName}</Text>
+          <Text style={styles.address}>{item.product}</Text>
+        </View>
       </View>
-    );
-  }
 
-  return (
-    <View style={styles.container}>
+      {/* Product Row */}
+      <View style={styles.productActionRow}>
+        {/* Product and Quantity */}
+        <View style={styles.productContainer}>
+          <MaterialCommunityIcons name="water" size={18} color={colors.primary[500]} />
+          <Text style={styles.productName}>Delivered: {item.deliveredQty}</Text>
+          <View style={styles.quantityBadge}>
+            <Text style={styles.quantityText}>Empty: {item.emptyQty}</Text>
+          </View>
+        </View>
+
+        {/* Amount and Method */}
+        <View style={styles.amountContainer}>
+          <Text style={styles.amountValue}>₹{item.amountPaid}</Text>
+          <Text style={styles.methodBadge}>{item.paymentMethod}</Text>
+        </View>
+      </View>
+
+      {/* Delivery Time */}
+      <View style={styles.timeRow}>
+        <MaterialCommunityIcons name="clock" size={14} color={colors.gray[500]} />
+        <Text style={styles.timeText}>{item.deliveredAt}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  // Render content based on state
+  let content;
+
+  if (loading) {
+    content = <DropletLoader visible={true} />;
+  } else if (selectedCompletedDelivery) {
+    // Show completed delivery details
+    content = (
+      <>
+        {/* Header */}
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={() => setSelectedCompletedDelivery(null)} style={styles.detailBackButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Delivery Details</Text>
+          <View style={styles.detailHeaderSpacer} />
+        </View>
+
+        {/* Details Content */}
+        <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false}>
+          {/* Customer Card */}
+          <View style={styles.detailCard}>
+            <Text style={styles.detailSectionTitle}>Customer Information</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Name</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.customerName}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Mobile</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.customerMobile || 'N/A'}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Address</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.customerAddress || 'N/A'}</Text>
+            </View>
+          </View>
+
+          {/* Product Card */}
+          <View style={styles.detailCard}>
+            <Text style={styles.detailSectionTitle}>Product Details</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Product</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.product}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Ordered Quantity</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.orderedQty || 0}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Delivered Quantity</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.deliveredQty}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Empty Collected</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.emptyQty}</Text>
+            </View>
+          </View>
+
+          {/* Payment Card */}
+          <View style={styles.detailCard}>
+            <Text style={styles.detailSectionTitle}>Payment Information</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Bill Amount</Text>
+              <Text style={styles.detailValueAmount}>₹{selectedCompletedDelivery.billAmount}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Amount Paid</Text>
+              <Text style={styles.detailValueAmount}>₹{selectedCompletedDelivery.amountPaid}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Pending Payment Received</Text>
+              <Text style={styles.detailValueAmount}>₹{selectedCompletedDelivery.pendingPaymentReceived}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Payment Method</Text>
+              <View style={styles.paymentMethodBadge}>
+                <MaterialCommunityIcons
+                  name={selectedCompletedDelivery.paymentMethod === 'online' ? 'credit-card' : 'cash'}
+                  size={14}
+                  color={colors.primary[600]}
+                />
+                <Text style={[styles.paymentMethodBadgeText, { marginLeft: spacing[6] }]}>
+                  {selectedCompletedDelivery.paymentMethod === 'online' ? 'Online' : 'Cash'}
+                </Text>
+              </View>
+            </View>
+            {selectedCompletedDelivery.paymentRef !== undefined && selectedCompletedDelivery.paymentRef > 0 ? (
+              <View>
+                <View style={styles.detailDivider} />
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Payment Reference</Text>
+                  <Text style={styles.detailValue}>{selectedCompletedDelivery.paymentRef}</Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Timeline Card */}
+          <View style={styles.detailCard}>
+            <Text style={styles.detailSectionTitle}>Timeline</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Ordered At</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.orderedAt}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Delivered At</Text>
+              <Text style={styles.detailValue}>{selectedCompletedDelivery.deliveredAt}</Text>
+            </View>
+          </View>
+
+          <View style={{ height: spacing[24] }} />
+        </ScrollView>
+      </>
+    );
+  } else {
+    // Show main delivery list
+    content = (
+      <>
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -774,25 +991,46 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       </View>
 
       {/* Deliveries List */}
-      {filteredOrders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="inbox-outline" size={64} color={colors.gray[300]} />
-          <Text style={styles.emptyText}>
-            {searchQuery ? 'No deliveries found' : `No ${activeTab} deliveries`}
-          </Text>
-          {searchQuery && (
-            <Text style={styles.emptySubtext}>Try searching with a different keyword</Text>
-          )}
-        </View>
+      {activeTab === 'pending' ? (
+        // Pending deliveries
+        filteredOrders.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="inbox-outline" size={64} color={colors.gray[300]} />
+            <Text style={styles.emptyText}>
+              {searchQuery ? 'No deliveries found' : 'No pending deliveries'}
+            </Text>
+            {searchQuery && (
+              <Text style={styles.emptySubtext}>Try searching with a different keyword</Text>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredOrders}
+            renderItem={renderDeliveryCard}
+            keyExtractor={(item) => item.id || Math.random().toString()}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={loading} onRefresh={loadOrders} />}
+          />
+        )
       ) : (
-        <FlatList
-          data={filteredOrders}
-          renderItem={renderDeliveryCard}
-          keyExtractor={(item) => item.id || Math.random().toString()}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={loadOrders} />}
-        />
+        // Delivered/Completed deliveries
+        completedDeliveries.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="check-circle-outline" size={64} color={colors.gray[300]} />
+            <Text style={styles.emptyText}>We're still waiting for the delivery crew to make their move! 🎯</Text>
+            <Text style={styles.emptySubtext}>No deliveries completed today yet</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={completedDeliveries}
+            renderItem={renderCompletedCard}
+            keyExtractor={(_, index) => `completed-${index}`}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={loading} onRefresh={loadCompletedDeliveries} />}
+          />
+        )
       )}
 
       {/* Complete Delivery Modal */}
@@ -1085,6 +1323,13 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+      </>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {content}
     </View>
   );
 }
@@ -1229,6 +1474,38 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.bold,
     color: colors.bg.white,
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  amountValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+    marginBottom: spacing[4],
+  },
+  methodBadge: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[500],
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.sm,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[6],
+    marginTop: spacing[8],
+    paddingTop: spacing[8],
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  timeText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
   },
   actionIconsRow: {
     flexDirection: 'row',
@@ -1453,5 +1730,83 @@ const styles = StyleSheet.create({
   },
   paymentMethodTextActive: {
     color: colors.bg.white,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[12],
+    backgroundColor: colors.bg.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  detailBackButton: {
+    padding: spacing[8],
+    marginLeft: -spacing[8],
+  },
+  detailHeaderSpacer: {
+    width: 40,
+  },
+  detailsContent: {
+    flex: 1,
+    backgroundColor: colors.bg.light,
+    paddingHorizontal: spacing[16],
+    paddingTop: spacing[16],
+  },
+  detailCard: {
+    backgroundColor: colors.bg.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing[16],
+    marginBottom: spacing[12],
+    ...elevation.sm,
+  },
+  detailSectionTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[800],
+    marginBottom: spacing[12],
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing[8],
+  },
+  detailLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[800],
+    textAlign: 'right',
+    flex: 1,
+  },
+  detailValueAmount: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+    textAlign: 'right',
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing[4],
+  },
+  paymentMethodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[6],
+    borderRadius: borderRadius.md,
+  },
+  paymentMethodBadgeText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
   },
 });
