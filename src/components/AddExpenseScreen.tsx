@@ -99,7 +99,7 @@ export default function AddExpenseScreen({ onBack }: { onBack: () => void }) {
                 style={[styles.badge, t === 'Other' && { width: '100%', justifyContent: 'center' }, selectedType === t && styles.badgeActive]}
               >
                 <MaterialCommunityIcons 
-                  name={typeIcons[t]} 
+                  name={typeIcons[t] as any} 
                   size={18} 
                   color={getIconColor(t, selectedType === t)} 
                   style={styles.badgeIcon}
