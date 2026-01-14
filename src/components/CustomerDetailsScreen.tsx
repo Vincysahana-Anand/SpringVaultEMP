@@ -34,12 +34,14 @@ interface CustomerDetailsScreenProps {
   customer: Customer;
   onBack: () => void;
   onEdit: () => void;
+  onViewHistory: () => void;
 }
 
 export default function CustomerDetailsScreen({
   customer,
   onBack,
   onEdit,
+  onViewHistory,
 }: CustomerDetailsScreenProps) {
   const [loading, setLoading] = useState(false);
 
@@ -234,6 +236,27 @@ export default function CustomerDetailsScreen({
           </View>
         </View>
 
+        {/* Purchase History Card */}
+        <TouchableOpacity style={styles.historyCard} onPress={onViewHistory}>
+          <View style={styles.historyLeft}>
+            <MaterialCommunityIcons
+              name="history"
+              size={22}
+              color={colors.primary[500]}
+              style={styles.historyIcon}
+            />
+            <View>
+              <Text style={styles.historyTitle}>Purchase History</Text>
+              <Text style={styles.historySubtitle}>View past deliveries and payments</Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={22}
+            color={colors.gray[500]}
+          />
+        </TouchableOpacity>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -400,6 +423,36 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.gray[800],
     fontWeight: typography.fontWeight.semibold,
+  },
+  historyCard: {
+    marginTop: spacing[8],
+    backgroundColor: colors.bg.white,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[16],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...elevation.sm,
+  },
+  historyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[12],
+    flex: 1,
+  },
+  historyIcon: {
+    marginRight: spacing[4],
+  },
+  historyTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[800],
+  },
+  historySubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+    marginTop: spacing[2],
   },
   divider: {
     height: 1,

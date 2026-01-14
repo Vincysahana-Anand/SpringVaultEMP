@@ -28,6 +28,7 @@ import { colors, spacing, typography, borderRadius, elevation } from '../shared/
 import DropletLoader from './DropletLoader';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import EditCustomerScreen from './EditCustomerScreen';
+import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 
 interface Customer {
   id: string;
@@ -58,6 +59,7 @@ export default function CustomersListScreen() {
   const [orderQuantity, setOrderQuantity] = useState('1');
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
     loadCustomers();
@@ -406,7 +408,14 @@ export default function CustomersListScreen() {
 
   return (
     <View style={styles.container}>
-      {selectedCustomer ? (
+      {historyCustomer ? (
+        <View style={styles.detailsContainer}>
+          <CustomerPurchaseHistoryScreen
+            customer={historyCustomer}
+            onBack={() => setHistoryCustomer(null)}
+          />
+        </View>
+      ) : selectedCustomer ? (
         <View style={styles.detailsContainer}>
           {selectedCustomer.id?.includes('edit-') ? (
             <EditCustomerScreen
@@ -424,6 +433,7 @@ export default function CustomersListScreen() {
               customer={selectedCustomer}
               onBack={() => setSelectedCustomer(null)}
               onEdit={() => setSelectedCustomer({ ...selectedCustomer, id: `edit-${selectedCustomer.id}` })}
+              onViewHistory={() => setHistoryCustomer(selectedCustomer)}
             />
           )}
         </View>
