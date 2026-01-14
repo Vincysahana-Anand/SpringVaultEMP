@@ -7,7 +7,7 @@ import {
   BackHandler,
   RefreshControl,
 } from 'react-native';
-import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuth, signOut } from '@react-native-firebase/auth';
 import { getFirestore, collection, query, where, getDocs, orderBy, limit } from '@react-native-firebase/firestore';
@@ -25,6 +25,8 @@ import { currencyINR } from '../utils/format';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
 import DeliveriesScreen from './DeliveriesScreen';
+import StockScreen from './StockScreen';
+import ExpenseScreen from './ExpenseScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -51,7 +53,7 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     const handleBackPress = () => {
-      if (currentScreen === 'customers' || currentScreen === 'deliveries') {
+      if (currentScreen === 'customers' || currentScreen === 'deliveries' || currentScreen === 'stock') {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
         return true;
@@ -130,6 +132,12 @@ export default function EmployeeDashboard() {
     setDrawerOpen(!drawerOpen);
   };
 
+  const handleNavigateToExpenses = () => {
+    setCurrentScreen('expense');
+    setActiveTab('Expense');
+    setDrawerOpen(false);
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut(getAuth());
@@ -156,7 +164,7 @@ export default function EmployeeDashboard() {
         <>
           <Text style={[styles.drawerTitle, { marginTop: 20 }]}>Admin Options</Text>
           <MenuItem icon="account-group" label="Manage Employees" />
-          <MenuItem icon="cash" label="Manage Expenses" />
+          <MenuItem icon="cash" label="Manage Expenses" onPress={handleNavigateToExpenses} />
           <MenuItem icon="chart-box" label="Reports" />
           <MenuItem icon="cog" label="Settings" />
         </>
@@ -180,6 +188,10 @@ export default function EmployeeDashboard() {
       setCurrentScreen('customers');
     } else if (tabLabel === 'Deliveries') {
       setCurrentScreen('deliveries');
+    } else if (tabLabel === 'Stock') {
+      setCurrentScreen('stock');
+    } else if (tabLabel === 'Expense') {
+      setCurrentScreen('expense');
     } else {
       setCurrentScreen('dashboard');
     }
@@ -203,6 +215,10 @@ export default function EmployeeDashboard() {
           <CustomersListScreen />
         ) : currentScreen === 'deliveries' ? (
           <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
+        ) : currentScreen === 'stock' ? (
+          <StockScreen userRole="employee" />
+        ) : currentScreen === 'expense' ? (
+          <ExpenseScreen />
         ) : (
           <ScrollView
             style={styles.content}

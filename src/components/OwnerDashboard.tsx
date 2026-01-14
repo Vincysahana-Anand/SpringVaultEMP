@@ -8,7 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { StatCard } from '../shared/components/StatCard';
 import { MenuItem } from '../shared/components/MenuItem';
 import { EdgeIndicator } from '../shared/components/EdgeIndicator';
@@ -23,6 +23,8 @@ import { handleServiceError } from '../services/serviceErrorWrapper';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
 import DeliveriesScreen from './DeliveriesScreen';
+import StockScreen from './StockScreen';
+import ExpenseScreen from './ExpenseScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -47,7 +49,7 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     const handleBackPress = () => {
-      if (currentScreen === 'customers' || currentScreen === 'deliveries') {
+      if (currentScreen === 'customers' || currentScreen === 'deliveries' || currentScreen === 'stock') {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
         return true;
@@ -61,6 +63,12 @@ export default function OwnerDashboard() {
 
   const toggleDrawer = () => {
     setDrawerOpen(!drawerOpen);
+  };
+
+  const handleNavigateToExpenses = () => {
+    setCurrentScreen('expense');
+    setActiveTab('Expense');
+    setDrawerOpen(false);
   };
 
   const handleSignOut = async () => {
@@ -129,7 +137,7 @@ export default function OwnerDashboard() {
       <MenuItem icon="truck-check" label="Manage Deliveries" />
       <MenuItem icon="account-group" label="Manage Customers" onPress={handleNavigateToCustomers} />
       <MenuItem icon="account-tie" label="Manage Employees" />
-      <MenuItem icon="cash" label="Manage Expenses" />
+      <MenuItem icon="cash" label="Manage Expenses" onPress={handleNavigateToExpenses} />
       <MenuItem icon="water" label="Manage Stock" />
       <MenuItem icon="chart-box" label="Reports" />
       <MenuItem icon="cog" label="Settings" />
@@ -143,6 +151,10 @@ export default function OwnerDashboard() {
       setCurrentScreen('customers');
     } else if (tabLabel === 'Deliveries') {
       setCurrentScreen('deliveries');
+    } else if (tabLabel === 'Stock') {
+      setCurrentScreen('stock');
+    } else if (tabLabel === 'Expense') {
+      setCurrentScreen('expense');
     } else {
       setCurrentScreen('dashboard');
     }
@@ -174,6 +186,10 @@ export default function OwnerDashboard() {
           <CustomersListScreen />
         ) : currentScreen === 'deliveries' ? (
           <DeliveriesScreen userRole="owner" isAdmin={true} />
+        ) : currentScreen === 'stock' ? (
+          <StockScreen userRole="owner" />
+        ) : currentScreen === 'expense' ? (
+          <ExpenseScreen />
         ) : (
           <ScrollView
             style={styles.content}

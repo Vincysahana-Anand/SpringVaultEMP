@@ -5,6 +5,7 @@ export interface Stock {
   id: string;
   productName: string;
   quantity: number;
+  price?: number; // Price per unit
   empty?: number; // Only for 20L can & party can
   total?: number; // Optional, can be used for total stock
   extraCan?: number;
@@ -62,11 +63,11 @@ export const updateStock = async (id: string, data: Partial<Stock>): Promise<tru
 // ✅ Optional: Helper to get product name by static ID
 export const resolveProductName = (id: string): string => {
   switch (id) {
-    case '20L_CAN': return '20-liter can';
-    case '1L_CASE': return '1-liter case';
+    case '20L_CAN': return '20 liter can';
+    case '1L_CASE': return '1 liter case';
     case '500ML_CASE': return '500ml case';
     case '300ML_CASE': return '300ml case';
-    case '20L_PARTY_CAN': return '20-liter party can';
+    case '20L_PARTY_CAN': return '20 liter party can';
     default: return 'Unknown';
   }
 };
