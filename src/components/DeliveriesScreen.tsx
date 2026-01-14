@@ -185,16 +185,21 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const handleSubmitDelivery = async () => {
     if (!selectedOrder?.id) return;
 
+    // Set submitting immediately to prevent multiple clicks
+    setSubmitting(true);
+
     // Validate full bottles delivered (mandatory)
     const fullBottles = parseInt(fullBottlesDelivered || '0', 10);
     if (isNaN(fullBottles) || fullBottles <= 0) {
       Alert.alert('Validation Error', 'Please enter at least 1 full water bottle delivered', [{ text: 'OK' }]);
+      setSubmitting(false);
       return;
     }
 
     // If online payment, ensure reference is provided
     if (paymentMethod === 'online' && !paymentRef.trim()) {
       Alert.alert('Validation Error', 'Please enter UTR / UPI Transaction ID for online payments', [{ text: 'OK' }]);
+      setSubmitting(false);
       return;
     }
 
@@ -216,8 +221,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     }
     
     if (!customer) {
-      Alert.alert('Error', 'Customer not found', [{ text: 'OK' }]);
       setSubmitting(false);
+      Alert.alert('Error', 'Customer not found', [{ text: 'OK' }]);
       return;
     }
     
@@ -265,8 +270,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     // Fetch stock details for the product
     const currentStock = products.find((p: Stock) => p.id === selectedOrder.productId);
     if (!currentStock) {
-      Alert.alert('Error', 'Stock not found for this product', [{ text: 'OK' }]);
       setSubmitting(false);
+      Alert.alert('Error', 'Stock not found for this product', [{ text: 'OK' }]);
       return;
     }
 
@@ -298,7 +303,6 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     });
 
     try {
-      setSubmitting(true);
       console.log('Starting delivery submission...');
       
       // Step 1: Update customer balance and extra can holding
@@ -350,7 +354,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         billAmount: billAmountValue,
         amountPaid: amountPaidValue,
         paymentMethod: paymentMethod,
-        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef, 10) : undefined
+        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef, 10) || 0 : 0
       };
 
       console.log('Purchase record to save:', purchaseRecord);
@@ -410,9 +414,11 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         selectedOrder.productName.toLowerCase().includes('liter'));
       
       const saleAmount = customerPrice * fullBottles;
-      const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaidValue) : 0;
-      const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaidValue) : 0;
-      
+      const pendingPaymentReceived = saleAmount < amountPaidValue ? amountPaidValue - saleAmount : 0;
+      const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaidValue - pendingPaymentReceived) : 0;
+      const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaidValue - pendingPaymentReceived) : 0;
+      const ordersCount = 0;
+      const deliveredCount = 1;
       console.log('Sales values before update:', {
         fullBottles: Number(fullBottles),
         emptyBottles: Number(emptyBottles),
@@ -421,7 +427,11 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         billAmountValue: Number(billAmountValue),
         saleAmount: Number(saleAmount),
         paymentMethod,
+        ordersCount: 0,
+        deliveredCount: 1,
       });
+
+      
       
       const salesUpdateResult = await updateSalesRecord(
         Number(fullBottles),
@@ -430,7 +440,10 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         Number(onlinePaidValue),
         Number(billAmountValue),
         isDeliveredCan,
-        Number(saleAmount)
+        Number(saleAmount),
+        Number(pendingPaymentReceived),
+        ordersCount,
+        deliveredCount
       );
       if (salesUpdateResult !== true) {
         console.error('Sales record update failed:', salesUpdateResult);

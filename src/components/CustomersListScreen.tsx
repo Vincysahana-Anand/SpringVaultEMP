@@ -19,6 +19,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers } from '../services/customerService';
 import { getStocks, Stock } from '../services/stockService';
+import { updateSalesRecord } from '../services/salesService';
 import { addOrder, getOrders, Order } from '../services/orderService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { currencyINR } from '../utils/format';
@@ -254,6 +255,7 @@ export default function CustomersListScreen() {
     setOrderCustomer(null);
     setOrderProduct(products.length > 0 ? products[0] : null);
     setOrderQuantity('1');
+    setSubmittingOrder(false);
   };
 
   const handleSubmitOrder = async () => {
@@ -312,6 +314,29 @@ export default function CustomersListScreen() {
       const result = await addOrder(orderData);
       
       if (result === true) {
+        // Update sales record
+        const fullBottles = 0, emptyBottles = 0, cashPaidValue = 0, onlinePaidValue = 0, billAmountValue = 0, isDeliveredCan = false, saleAmount = 0, pendingPaymentReceived = 0; // Dummy values for illustration
+        const ordersCount = 1, deliveredCount = 0;
+        const salesUpdateResult = await updateSalesRecord(
+                Number(fullBottles),
+                Number(emptyBottles),
+                Number(cashPaidValue),
+                Number(onlinePaidValue),
+                Number(billAmountValue),
+                isDeliveredCan,
+                Number(saleAmount),
+                Number(pendingPaymentReceived),
+                ordersCount,
+                deliveredCount
+              );
+              if (salesUpdateResult !== true) {
+                console.error('Sales record update failed:', salesUpdateResult);
+                handleServiceError(salesUpdateResult, 'updateSalesRecord');
+                setSubmittingOrder(false);
+                return;
+              }
+              console.log('Sales record updated successfully');
+
         // Clear fields and close modal
         handleCloseOrderModal();
         

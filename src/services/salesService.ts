@@ -11,6 +11,9 @@ export interface SalesRecord {
   delivered: number;
   deliveredCans: number;
   emptyCollected: number;
+  pendingPaymentReceived?: number;
+  ordersCount?: number;
+  deliveredCount?: number;
 }
 
 /**
@@ -35,7 +38,10 @@ export const updateSalesRecord = async (
   onlinePaidValue: number,
   billAmount: number,
   isDeliveredCan: boolean,
-  saleAmount: number
+  saleAmount: number,
+  pendingPaymentReceived?: number,
+  ordersCount?: number,
+  deliveredCount?: number
 ): Promise<true | ServiceError> => {
   try {
     const db = getFirestore();
@@ -56,10 +62,11 @@ export const updateSalesRecord = async (
         cashPayment: existingData.cashPayment + cashPaidValue,
         onlinePayment: existingData.onlinePayment + onlinePaidValue,
         expense: existingData.expense || 0, // Keep existing expense
-        orders: existingData.orders + 1,
-        delivered: existingData.delivered + 1,
+        orders: existingData.orders + + (ordersCount || 0),
+        delivered: existingData.delivered + (deliveredCount || 0),
         deliveredCans: existingData.deliveredCans + (isDeliveredCan ? deliveredQty : 0),
         emptyCollected: existingData.emptyCollected + emptyQty,
+        pendingPaymentReceived: (existingData.pendingPaymentReceived || 0) + (pendingPaymentReceived || 0),
       };
 
       await updateDoc(salesDocRef, updatedData);
@@ -72,10 +79,11 @@ export const updateSalesRecord = async (
         cashPayment: cashPaidValue,
         onlinePayment: onlinePaidValue,
         expense: 0,
-        orders: 1,
-        delivered: 1,
+        orders: ordersCount || 0,
+        delivered: deliveredCount || 0,
         deliveredCans: isDeliveredCan ? deliveredQty : 0,
         emptyCollected: emptyQty,
+        pendingPaymentReceived: pendingPaymentReceived || 0,
       };
 
       await setDoc(salesDocRef, newSalesRecord);
