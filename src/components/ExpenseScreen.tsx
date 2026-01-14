@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { Expense, getExpenses, addExpense } from '../services/expenseService';
+import { Expense, getExpenses } from '../services/expenseService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
+import DropletLoader from './DropletLoader';
 
 const colors = {
   primary: { 500: '#0ea5e9', 600: '#0284c7' },
@@ -13,15 +14,11 @@ const colors = {
   danger: { 500: '#ef4444' },
 };
 
-export default function ExpenseScreen() {
+export default function ExpenseScreen({ onAddPress }: { onAddPress?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [type, setType] = useState('');
-  const [amount, setAmount] = useState('');
-  const [adding, setAdding] = useState(false);
-
+  const [totalExpense, setTotalExpense] = useState(0);
   const todayIST = getISTDate();
-  const dateLabel = todayIST.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
 
   const fetchTodayExpenses = async () => {
     try {
@@ -29,6 +26,8 @@ export default function ExpenseScreen() {
       const result = await getExpenses({ type: 'today' });
       if (Array.isArray(result)) {
         setExpenses(result);
+        const total = result.reduce((sum, e) => sum + (e.amount || 0), 0);
+        setTotalExpense(total);
       } else {
         handleServiceError(result, 'getExpenses');
       }
@@ -43,39 +42,7 @@ export default function ExpenseScreen() {
     fetchTodayExpenses();
   }, []);
 
-  const onAddExpense = async () => {
-    const amt = parseFloat(amount);
-    if (!type.trim()) {
-      Alert.alert('Validation', 'Enter a type/description');
-      return;
-    }
-    if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Validation', 'Enter a valid amount');
-      return;
-    }
 
-    try {
-      setAdding(true);
-      const newExpense: Expense = {
-        type: type.trim(),
-        amount: amt,
-        createdAt: getISTDate(),
-      };
-      const res = await addExpense(newExpense);
-      if (res !== true) {
-        handleServiceError(res, 'addExpense');
-        return;
-      }
-      setType('');
-      setAmount('');
-      await fetchTodayExpenses();
-      Alert.alert('Success', 'Expense added');
-    } catch (error) {
-      handleServiceError(error, 'addExpense');
-    } finally {
-      setAdding(false);
-    }
-  };
 
   const renderItem = ({ item }: { item: Expense }) => {
     const created = (item as any)?.createdAt;
@@ -102,66 +69,46 @@ export default function ExpenseScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Expenses</Text>
-        <Text style={styles.subtitle}>Today • {dateLabel} (IST)</Text>
-      </View>
-
-      <View style={styles.addForm}>
-        <TextInput
-          style={styles.input}
-          placeholder="Type (e.g. Diesel, Rent, Misc)"
-          placeholderTextColor={colors.gray[400]}
-          value={type}
-          onChangeText={setType}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Amount"
-          placeholderTextColor={colors.gray[400]}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="decimal-pad"
-        />
-        <TouchableOpacity style={styles.addBtn} onPress={onAddExpense} disabled={adding}>
-          {adding ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <MaterialCommunityIcons name="plus-circle" size={20} color="#fff" />
-              <Text style={styles.addBtnText}>Add Expense</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 16 }} />
+        <DropletLoader visible={true} />
       ) : (
         <FlatList
           data={expenses}
           keyExtractor={(item, idx) => item.id ?? String(idx)}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 16 }}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={() => (
             <Text style={styles.empty}>No expenses recorded today</Text>
           )}
         />
       )}
+      
+      <View style={styles.bottomContainer}>
+        <View style={styles.summaryChip}>
+          <MaterialCommunityIcons name="cash-multiple" size={20} color={colors.primary[600]} />
+          <View style={{ marginLeft: 10, flex: 1 }}>
+            <Text style={styles.summaryLabel}>Today's Expense</Text>
+            <Text style={styles.summaryAmount}>₹ {totalExpense.toFixed(2)}</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.addButton} onPress={() => onAddPress && onAddPress()}>
+          <MaterialCommunityIcons name="plus" size={18} color="#fff" />
+          <Text style={styles.addButtonText}>Add</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg.white, padding: 16 },
-  header: { marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.gray[800] },
-  subtitle: { fontSize: 14, color: colors.gray[600], marginTop: 4 },
-  addForm: { backgroundColor: colors.bg.light, padding: 12, borderRadius: 12, marginBottom: 12 },
-  input: { backgroundColor: '#fff', borderColor: colors.gray[200], borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary[600], borderRadius: 10, paddingVertical: 10 },
-  addBtnText: { color: '#fff', fontWeight: '600', marginLeft: 8 },
+  container: { flex: 1, backgroundColor: colors.bg.white },
+  bottomContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.bg.white, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 10, borderTopWidth: 1, borderTopColor: colors.gray[200] },
+  summaryChip: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary[500], paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
+  summaryLabel: { fontSize: 10, color: 'rgba(255, 255, 255, 0.8)', fontWeight: '500' },
+  summaryAmount: { fontSize: 14, color: '#fff', fontWeight: '700', marginTop: 2 },
+  addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.success[500], paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, elevation: 1 },
+  addButtonText: { color: '#fff', fontWeight: '700', marginLeft: 6, fontSize: 13 },
   card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.gray[200] },
   cardLeft: { flexDirection: 'row', alignItems: 'center' },
   expenseType: { fontSize: 16, color: colors.gray[800], fontWeight: '600' },

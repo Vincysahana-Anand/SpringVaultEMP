@@ -138,3 +138,36 @@ export const getSalesRecordsByDateRange = async (
     return handleServiceError(error, 'getSalesRecordsByDateRange');
   }
 };
+
+/**
+ * Add expense to today's sales record (creates if missing)
+ */
+export const addExpenseToSales = async (amount: number): Promise<true | ServiceError> => {
+  try {
+    const db = getFirestore();
+    const dateString = getISTDateString();
+    const salesDocRef = doc(collection(db, 'sales'), dateString);
+    const snap = await getDoc(salesDocRef);
+
+    if (snap.exists()) {
+      const existing = snap.data() as SalesRecord;
+      await updateDoc(salesDocRef, { expense: (existing.expense || 0) + amount });
+    } else {
+      const newRec: SalesRecord = {
+        totalSale: 0,
+        cashPayment: 0,
+        onlinePayment: 0,
+        expense: amount,
+        orders: 0,
+        delivered: 0,
+        deliveredCans: 0,
+        emptyCollected: 0,
+      };
+      await setDoc(salesDocRef, newRec);
+    }
+
+    return true;
+  } catch (error) {
+    return handleServiceError(error, 'addExpenseToSales');
+  }
+};

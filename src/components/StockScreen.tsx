@@ -7,14 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getStocks, updateStock, Stock } from '../services/stockService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
-import EditStockScreen from './EditStockScreen';
-
+import EditStockScreen from './EditStockScreen';import DropletLoader from './DropletLoader';
 interface StockScreenProps {
   userRole?: 'owner' | 'employee';
 }
@@ -179,8 +177,7 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
-        <Text style={styles.loadingText}>Loading stocks...</Text>
+        <DropletLoader visible={true} />
       </View>
     );
   }

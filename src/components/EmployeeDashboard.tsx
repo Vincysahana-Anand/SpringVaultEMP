@@ -27,6 +27,7 @@ import CustomersListScreen from './CustomersListScreen';
 import DeliveriesScreen from './DeliveriesScreen';
 import StockScreen from './StockScreen';
 import ExpenseScreen from './ExpenseScreen';
+import AddExpenseScreen from './AddExpenseScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -218,7 +219,9 @@ export default function EmployeeDashboard() {
         ) : currentScreen === 'stock' ? (
           <StockScreen userRole="employee" />
         ) : currentScreen === 'expense' ? (
-          <ExpenseScreen />
+          <ExpenseScreen onAddPress={() => setCurrentScreen('addExpense')} />
+        ) : currentScreen === 'addExpense' ? (
+          <AddExpenseScreen onBack={() => setCurrentScreen('expense')} />
         ) : (
           <ScrollView
             style={styles.content}
