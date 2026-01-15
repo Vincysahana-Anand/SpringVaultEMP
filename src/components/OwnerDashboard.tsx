@@ -57,6 +57,10 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     const handleBackPress = () => {
+      if (drawerOpen) {
+        setDrawerOpen(false);
+        return true;
+      }
       if (currentScreen === 'customers' || currentScreen === 'deliveries' || currentScreen === 'stock') {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
@@ -67,11 +71,10 @@ export default function OwnerDashboard() {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => backHandler.remove();
-  }, [currentScreen]);
+  }, [currentScreen, drawerOpen]);
 
-  const toggleDrawer = () => {
-    setDrawerOpen(!drawerOpen);
-  };
+  const openDrawer = () => setDrawerOpen(true);
+  const closeDrawer = () => setDrawerOpen(false);
 
   const handleNavigateToExpenses = () => {
     setCurrentScreen('expense');
@@ -136,7 +139,7 @@ export default function OwnerDashboard() {
 
   const handleNavigate = (screen: string) => {
     setCurrentScreen(screen);
-    setDrawerOpen(false);
+    closeDrawer();
   };
 
   const drawerMenuContent = (
@@ -213,7 +216,8 @@ export default function OwnerDashboard() {
       <EdgeIndicator />
       <DrawerLayout
         drawerOpen={drawerOpen}
-        onDrawerToggle={toggleDrawer}
+        onDrawerOpen={openDrawer}
+        onDrawerClose={closeDrawer}
         drawerContent={drawerMenuContent}
         drawerFooter={drawerFooter}
         drawerLogo={logo}

@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  BackHandler,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -51,6 +52,18 @@ export default function CustomerDashboard() {
     loadCustomerData();
     fetchUserProfile();
   }, []);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (drawerOpen) {
+        closeDrawer();
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [drawerOpen]);
 
   const fetchUserProfile = async () => {
     try {
@@ -129,9 +142,8 @@ export default function CustomerDashboard() {
     }
   };
 
-  const toggleDrawer = () => {
-    setDrawerOpen(!drawerOpen);
-  };
+  const openDrawer = () => setDrawerOpen(true);
+  const closeDrawer = () => setDrawerOpen(false);
 
   // Using shared ActionButton and SaleCard components
 
@@ -167,7 +179,8 @@ export default function CustomerDashboard() {
       <EdgeIndicator />
       <DrawerLayout
         drawerOpen={drawerOpen}
-        onDrawerToggle={toggleDrawer}
+        onDrawerOpen={openDrawer}
+        onDrawerClose={closeDrawer}
         drawerContent={drawerMenuContent}
         drawerLogo={logo}
         onTabChange={setActiveTab}

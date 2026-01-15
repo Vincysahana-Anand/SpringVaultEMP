@@ -10,9 +10,10 @@ import {
   ImageSourcePropType,
 } from 'react-native';
 import { TabButton } from '../components/TabButton';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 
 const DRAWER_WIDTH = 280;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface DrawerLayoutProps {
   children: ReactNode; // Main content
@@ -20,7 +21,8 @@ interface DrawerLayoutProps {
   drawerFooter?: ReactNode; // Fixed bottom section (e.g., sign out)
   drawerLogo: ImageSourcePropType;
   drawerOpen: boolean;
-  onDrawerToggle: () => void;
+  onDrawerOpen: () => void;
+  onDrawerClose: () => void;
   tabButtons: Array<{
     icon: string;
     label: string;
@@ -35,7 +37,8 @@ export function DrawerLayout({
   drawerFooter,
   drawerLogo,
   drawerOpen,
-  onDrawerToggle,
+  onDrawerOpen,
+  onDrawerClose,
   tabButtons,
   onTabChange,
 }: DrawerLayoutProps) {
@@ -54,26 +57,32 @@ export function DrawerLayout({
     PanResponder.create({
       onStartShouldSetPanResponder: (evt, gestureState) => {
         const { locationX } = evt.nativeEvent;
-        return locationX < 20 && !drawerOpen;
+        const isMenuToggleArea = evt.nativeEvent.locationX <= 64 && evt.nativeEvent.locationY <= 80;
+        if (isMenuToggleArea) {
+          return false;
+        }
+        return drawerOpen || locationX < 20;
       },
       onMoveShouldSetPanResponder: (evt, gestureState) => {
         return Math.abs(gestureState.dx) > 10;
       },
       onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dx > 0 && gestureState.dx <= DRAWER_WIDTH) {
-          drawerAnimation.setValue(-DRAWER_WIDTH + gestureState.dx);
-        } else if (drawerOpen && gestureState.dx < 0) {
-          const newValue = -gestureState.dx;
-          if (newValue <= DRAWER_WIDTH) {
-            drawerAnimation.setValue(-newValue);
+        if (!drawerOpen) {
+          if (gestureState.dx > 0 && gestureState.dx <= DRAWER_WIDTH) {
+            drawerAnimation.setValue(-DRAWER_WIDTH + gestureState.dx);
+          }
+        } else {
+          if (gestureState.dx < 0) {
+            const newValue = Math.max(-DRAWER_WIDTH, gestureState.dx);
+            drawerAnimation.setValue(newValue);
           }
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dx > DRAWER_WIDTH / 2) {
-          onDrawerToggle();
+        if (!drawerOpen && gestureState.dx > DRAWER_WIDTH / 2) {
+          onDrawerOpen();
         } else if (drawerOpen && gestureState.dx < -DRAWER_WIDTH / 2) {
-          onDrawerToggle();
+          onDrawerClose();
         } else {
           Animated.spring(drawerAnimation, {
             toValue: drawerOpen ? 0 : -DRAWER_WIDTH,
@@ -86,6 +95,27 @@ export function DrawerLayout({
 
   return (
     <View {...panResponder.panHandlers} style={{ flex: 1, backgroundColor: '#fafbfc' }}>
+      <TouchableOpacity
+        onPress={drawerOpen ? onDrawerClose : onDrawerOpen}
+        style={{
+          position: 'absolute',
+          left: 12,
+          top: drawerOpen ? 12 : SCREEN_HEIGHT / 2 - 22,
+          zIndex: 30,
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: 8,
+          padding: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 6,
+        }}
+        activeOpacity={0.8}
+      >
+        <MaterialCommunityIcons name={drawerOpen ? 'close' : 'menu'} size={14} color="#0f172a" />
+      </TouchableOpacity>
+
       {/* Main Content */}
       <View style={{ flex: 1 }}>
         {children}
@@ -161,7 +191,7 @@ export function DrawerLayout({
             zIndex: 15,
           }}
           activeOpacity={1}
-          onPress={onDrawerToggle}
+          onPress={onDrawerClose}
         />
       )}
 
