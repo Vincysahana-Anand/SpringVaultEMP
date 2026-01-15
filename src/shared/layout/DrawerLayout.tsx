@@ -17,6 +17,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface DrawerLayoutProps {
   children: ReactNode; // Main content
   drawerContent: ReactNode; // Drawer menu items
+  drawerFooter?: ReactNode; // Fixed bottom section (e.g., sign out)
   drawerLogo: ImageSourcePropType;
   drawerOpen: boolean;
   onDrawerToggle: () => void;
@@ -31,6 +32,7 @@ interface DrawerLayoutProps {
 export function DrawerLayout({
   children,
   drawerContent,
+  drawerFooter,
   drawerLogo,
   drawerOpen,
   onDrawerToggle,
@@ -109,25 +111,41 @@ export function DrawerLayout({
           { transform: [{ translateX: drawerAnimation }] },
         ]}
       >
-        <View
-          style={{
-            paddingHorizontal: 20,
-            paddingVertical: 20,
-            borderBottomWidth: 1,
-            borderBottomColor: '#e5e7eb',
-            justifyContent: 'flex-start',
-          }}
-        >
-          <Image source={drawerLogo} style={{ height: 50, width: 50 }} resizeMode="contain" />
-        </View>
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingVertical: 28,
+              borderBottomWidth: 1,
+              borderBottomColor: '#e5e7eb',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Image source={drawerLogo} style={{ width: '100%', height: 96 }} resizeMode="contain" />
+          </View>
 
-        <ScrollView
-          style={{
-            paddingVertical: 12,
-          }}
-        >
-          {drawerContent}
-        </ScrollView>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingVertical: 12, paddingBottom: 80 }}
+          >
+            {drawerContent}
+          </ScrollView>
+
+          {drawerFooter ? (
+            <View
+              style={{
+                paddingHorizontal: 20,
+                paddingVertical: 16,
+                borderTopWidth: 1,
+                borderTopColor: '#e5e7eb',
+                backgroundColor: '#fff',
+              }}
+            >
+              {drawerFooter}
+            </View>
+          ) : null}
+        </View>
       </Animated.View>
 
       {/* Overlay */}

@@ -6,8 +6,9 @@ import {
   ScrollView,
   BackHandler,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuth, signOut } from '@react-native-firebase/auth';
 import { getFirestore, collection, query, where, getDocs, orderBy, limit } from '@react-native-firebase/firestore';
@@ -28,6 +29,12 @@ import DeliveriesScreen from './DeliveriesScreen';
 import StockScreen from './StockScreen';
 import ExpenseScreen from './ExpenseScreen';
 import AddExpenseScreen from './AddExpenseScreen';
+import AddCustomerScreen from './AddCustomerScreen';
+import PastDeliveriesScreen from './PastDeliveriesScreen';
+import PaymentBalancesScreen from './PaymentBalancesScreen';
+import ExtraCanHoldingsScreen from './ExtraCanHoldingsScreen';
+import PastSalesScreen from './PastSalesScreen';
+import PastExpensesScreen from './PastExpensesScreen';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -133,9 +140,8 @@ export default function EmployeeDashboard() {
     setDrawerOpen(!drawerOpen);
   };
 
-  const handleNavigateToExpenses = () => {
-    setCurrentScreen('expense');
-    setActiveTab('Expense');
+  const handleNavigate = (screen: string) => {
+    setCurrentScreen(screen);
     setDrawerOpen(false);
   };
 
@@ -147,32 +153,50 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const handleNavigateToCustomers = () => {
-    setCurrentScreen('customers');
-    setDrawerOpen(false);
-  };
-
   const drawerMenuContent = (
     <>
-      <Text style={styles.drawerTitle}>Menu</Text>
-      <MenuItem icon="home" label="Dashboard" />
-      <MenuItem icon="truck" label="My Deliveries" />
-      <MenuItem icon="calendar" label="Schedule" />
-      <MenuItem icon="wallet" label="Earnings" />
-      <MenuItem icon="account-group" label="View Customers" onPress={handleNavigateToCustomers} />
-
-      {isAdmin && (
-        <>
-          <Text style={[styles.drawerTitle, { marginTop: 20 }]}>Admin Options</Text>
-          <MenuItem icon="account-group" label="Manage Employees" />
-          <MenuItem icon="cash" label="Manage Expenses" onPress={handleNavigateToExpenses} />
-          <MenuItem icon="chart-box" label="Reports" />
-          <MenuItem icon="cog" label="Settings" />
-        </>
-      )}
-
-      <MenuItem icon="logout" label="Sign Out" onPress={handleSignOut} />
+      <Text style={styles.drawerTitle}>Quick Access</Text>
+      <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
+      <MenuItem icon="history" label="Past Deliveries" onPress={() => handleNavigate('pastDeliveries')} />
+      <MenuItem icon="wallet-outline" label="Payment Balances" onPress={() => handleNavigate('paymentBalances')} />
+      <MenuItem icon="bottle-soda" label="Extra Can Holdings" onPress={() => handleNavigate('extraCan')} />
+      <MenuItem icon="chart-line" label="Past Sales" onPress={() => handleNavigate('pastSales')} />
+      <MenuItem icon="cash-multiple" label="Past Expenses" onPress={() => handleNavigate('pastExpenses')} />
     </>
+  );
+
+  const drawerFooter = (
+    <View style={{ gap: 12 }}>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+        onPress={() => handleNavigate('counterSale')}
+      >
+        <MaterialCommunityIcons name="cart-outline" size={20} color="#0ea5e9" />
+        <Text style={{ color: '#0ea5e9', fontWeight: '700' }}>Counter Sale</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
+
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+        onPress={handleSignOut}
+      >
+        <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
+        <Text style={{ color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const PlaceholderCard = ({ title, subtitle, icon }: { title: string; subtitle: string; icon: any }) => (
+    <View style={{ padding: 16 }}>
+      <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <MaterialCommunityIcons name={icon} size={22} color="#0ea5e9" />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>{title}</Text>
+        </View>
+        <Text style={{ marginTop: 10, color: '#475569', lineHeight: 20 }}>{subtitle}</Text>
+      </View>
+    </View>
   );
 
   const tabButtonsConfig = [
@@ -205,6 +229,7 @@ export default function EmployeeDashboard() {
         drawerOpen={drawerOpen}
         onDrawerToggle={toggleDrawer}
         drawerContent={drawerMenuContent}
+        drawerFooter={drawerFooter}
         drawerLogo={logo}
         onTabChange={handleTabChange}
         tabButtons={tabButtonsConfig.map((tab) => ({
@@ -222,6 +247,24 @@ export default function EmployeeDashboard() {
           <ExpenseScreen onAddPress={() => setCurrentScreen('addExpense')} />
         ) : currentScreen === 'addExpense' ? (
           <AddExpenseScreen onBack={() => setCurrentScreen('expense')} />
+        ) : currentScreen === 'addCustomer' ? (
+          <AddCustomerScreen onBack={() => setCurrentScreen('dashboard')} />
+        ) : currentScreen === 'pastDeliveries' ? (
+          <PastDeliveriesScreen onBack={() => setCurrentScreen('dashboard')} />
+        ) : currentScreen === 'paymentBalances' ? (
+          <PaymentBalancesScreen onBack={() => setCurrentScreen('dashboard')} />
+        ) : currentScreen === 'extraCan' ? (
+          <ExtraCanHoldingsScreen onBack={() => setCurrentScreen('dashboard')} />
+        ) : currentScreen === 'pastSales' ? (
+          <PastSalesScreen onBack={() => setCurrentScreen('dashboard')} />
+        ) : currentScreen === 'pastExpenses' ? (
+          <PastExpensesScreen onBack={() => setCurrentScreen('dashboard')} />
+        ) : currentScreen === 'counterSale' ? (
+          <PlaceholderCard
+            title="Counter Sale"
+            subtitle="Quick counter billing will appear here."
+            icon="cart-outline"
+          />
         ) : (
           <ScrollView
             style={styles.content}
