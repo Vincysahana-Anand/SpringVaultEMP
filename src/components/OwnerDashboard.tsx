@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,13 +13,12 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { StatCard } from '../shared/components/StatCard';
 import { MenuItem } from '../shared/components/MenuItem';
 import { EdgeIndicator } from '../shared/components/EdgeIndicator';
-import { getIconColor } from '../shared/icons/colorMap';
 import { currencyINR } from '../utils/format';
 import { getAuth, signOut } from '@react-native-firebase/auth';
-import { getOrders } from '../services/orderService';
 import { getCustomers } from '../services/customerService';
 import { getStocks } from '../services/stockService';
 import { getExpenses } from '../services/expenseService';
+import { getSalesRecord } from '../services/salesService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
@@ -33,23 +32,42 @@ import PaymentBalancesScreen from './PaymentBalancesScreen';
 import ExtraCanHoldingsScreen from './ExtraCanHoldingsScreen';
 import PastSalesScreen from './PastSalesScreen';
 import PastExpensesScreen from './PastExpensesScreen';
+import { getISTDate } from '../utils/dateUtils';
+import { getOrders } from '../services/orderService';
 
 const logo = require('../assets/banner.png');
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 export default function OwnerDashboard() {
   const [stats, setStats] = useState({
-    totalDeliveries: 0,
+    ordersToday: 0,
+    deliveredToday: 0,
     pendingDeliveries: 0,
+    deliveredCans: 0,
+    emptyCollected: 0,
     sale: 0,
+    cashPayment: 0,
+    onlinePayment: 0,
+    pendingPaymentsReceived: 0,
     expense: 0,
-    stock: 0,
+    inHandCash: 0,
+    stockTotal: 0,
+    stock20L: 0,
+    stock20LEmpty: 0,
+    stock20LExtra: 0,
     customers: 0,
+    customersResidence: 0,
+    customersShop: 0,
+    customersParty: 0,
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [snapshotDate, setSnapshotDate] = useState<Date>(() => {
+    const today = getISTDate();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
 
   useEffect(() => {
     fetchDashboardStats();
@@ -90,39 +108,110 @@ export default function OwnerDashboard() {
     }
   };
 
+  const formatDateKey = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const isServiceError = (res: any): res is { code: string; message: string } => {
+    return !!(res && typeof res === 'object' && 'code' in res && 'message' in res);
+  };
+
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
-      // Fetch orders
-      const ordersResult = await getOrders();
+      const today = getISTDate();
+      today.setHours(0, 0, 0, 0);
+      setSnapshotDate(today);
+
+      const [ordersResult, salesResult, stocksResult, customersResult, expensesResult] = await Promise.all([
+        getOrders(),
+        getSalesRecord(formatDateKey(today)),
+        getStocks(),
+        getCustomers(),
+        getExpenses({ type: 'today' }),
+      ]);
+
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
-      const totalDeliveries = orders.length;
-      const pendingDeliveries = orders.filter(o => !o.deliveredAt).length;
+      if (isServiceError(ordersResult)) {
+        handleServiceError(ordersResult, 'getOrders');
+      }
 
-      // Fetch customers
-      const customersResult = await getCustomers();
-      const customers = Array.isArray(customersResult) ? customersResult : [];
+      const openOrders = orders.filter((order) => !order.deliveredAt);
 
-      // Fetch stocks
-      const stocksResult = await getStocks();
+      const sales = !isServiceError(salesResult) && salesResult ? salesResult : null;
+      if (isServiceError(salesResult)) {
+        handleServiceError(salesResult, 'getSalesRecord');
+      }
+
       const stocks = Array.isArray(stocksResult) ? stocksResult : [];
-      const totalStock = stocks.reduce((sum, s) => sum + (s.quantity || 0), 0);
+      if (isServiceError(stocksResult)) {
+        handleServiceError(stocksResult, 'getStocks');
+      }
 
-      // Fetch expenses (today)
-      const expensesResult = await getExpenses({ type: 'today' });
+      const customers = Array.isArray(customersResult) ? customersResult : [];
+      if (isServiceError(customersResult)) {
+        handleServiceError(customersResult, 'getCustomers');
+      }
+
+      const customerTypeCounts = customers.reduce(
+        (acc, cur) => {
+          if (cur.customerType === 'Residence') acc.residence += 1;
+          else if (cur.customerType === 'Shop') acc.shop += 1;
+          else if (cur.customerType === 'Party') acc.party += 1;
+          return acc;
+        },
+        { residence: 0, shop: 0, party: 0 }
+      );
+
       const expenses = Array.isArray(expensesResult) ? expensesResult : [];
-      const totalExpense = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      if (isServiceError(expensesResult)) {
+        handleServiceError(expensesResult, 'getExpenses');
+      }
 
-      // Calculate total sales (from orders)
-      const totalSale = orders.reduce((sum, o) => sum + (o.amountPaid || 0), 0);
+      const expenseTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      const ordersToday = sales?.orders || 0;
+      const deliveredToday = sales?.delivered || 0;
+      const deliveredCans = sales?.deliveredCans || 0;
+      const emptyCollected = sales?.emptyCollected || 0;
+      const pendingDeliveries = openOrders.length;
+
+      const saleTotal = sales?.totalSale || 0;
+      const cashPayment = sales?.cashPayment || 0;
+      const onlinePayment = sales?.onlinePayment || 0;
+      const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) + (sales?.onlineBillsPayment || 0);
+      const expenseValue = expenseTotal || sales?.expense || 0;
+      const inHandCash = cashPayment + (sales?.cashBillsPayment || 0) - expenseValue;
+
+      const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20') || s.productName?.toLowerCase().includes('20l'));
+      const stock20LEmpty = stock20L?.empty || 0;
+      const stock20LExtra = stock20L?.extraCan || 0;
+      const stock20LQty = stock20L?.quantity || 0;
+      const totalStock = (stock20L?.total as number | undefined) ?? stock20LQty;
 
       setStats({
-        totalDeliveries,
+        ordersToday,
+        deliveredToday,
         pendingDeliveries,
-        sale: totalSale,
-        expense: totalExpense,
-        stock: totalStock,
+        deliveredCans,
+        emptyCollected,
+        sale: saleTotal,
+        cashPayment,
+        onlinePayment,
+        pendingPaymentsReceived,
+        expense: expenseValue,
+        inHandCash,
+        stockTotal: totalStock,
+        stock20L: stock20LQty,
+        stock20LEmpty,
+        stock20LExtra,
         customers: customers.length,
+        customersResidence: customerTypeCounts.residence,
+        customersShop: customerTypeCounts.shop,
+        customersParty: customerTypeCounts.party,
       });
       setLoading(false);
     } catch (e) {
@@ -211,6 +300,10 @@ export default function OwnerDashboard() {
     { icon: 'water', label: 'Stock' },
   ];
 
+  const snapshotLabel = useMemo(() => {
+    return snapshotDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }, [snapshotDate]);
+
   return (
     <SafeAreaView style={styles.container}>
       <EdgeIndicator />
@@ -263,57 +356,67 @@ export default function OwnerDashboard() {
               <RefreshControl refreshing={loading} onRefresh={fetchDashboardStats} />
             }
           >
-          {/* Welcome */}
-          <Text style={styles.welcome}>Welcome, Admin!</Text>
-
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard
-                icon="truck"
-                label="Total Deliveries"
-                value={stats.totalDeliveries}
-                subLabel={undefined}
-              />
-              <StatCard
-                icon="clock"
-                label="Pending Deliveries"
-                value={stats.pendingDeliveries}
-                subLabel={undefined}
-              />
-            </View>
-            <View style={styles.statsRow}>
-              <StatCard
-                icon="cash"
-                label="Sale"
-                value={currencyINR(stats.sale)}
-                subLabel={undefined}
-                bgColor="#f0fdf4"
-              />
-              <StatCard
-                icon="chart-line"
-                label="Expense"
-                value={currencyINR(stats.expense)}
-                subLabel={undefined}
-                bgColor="#fff5f5"
-              />
+          <View style={styles.topRow}>
+            <Text style={styles.welcome}>Welcome, Admin</Text>
+            <View style={styles.datePill}>
+              <MaterialCommunityIcons name="calendar" size={16} color="#475569" />
+              <Text style={styles.snapshotDate}>{snapshotLabel}</Text>
             </View>
           </View>
 
-          {/* More Stats */}
+          <Text style={styles.sectionLabel}>Deliveries</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statsRow}>
-              <StatCard
-                icon="water"
-                label="Stock"
-                value={stats.stock}
-                subLabel="Bottles"
-              />
-              <StatCard icon="account-multiple" label="Customers" value={stats.customers} subLabel={undefined} />
+              <StatCard icon="playlist-check" label="Pending deliveries" value={stats.pendingDeliveries} />
+              <StatCard icon="truck-delivery" label="Delivered today" value={stats.deliveredToday} />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="bottle-soda" label="Delivered cans" value={stats.deliveredCans} />
+              <StatCard icon="bottle-wine" label="Empty collected" value={stats.emptyCollected} />
             </View>
           </View>
 
-          <View style={{ height: 40 }} />
+          <Text style={styles.sectionLabel}>Sales & Cash</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="cash-plus" label="Cash payments" value={currencyINR(stats.cashPayment)} />
+              <StatCard icon="credit-card" label="Online payments" value={currencyINR(stats.onlinePayment)} />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="cash" label="Sale" value={currencyINR(stats.sale)} bgColor="#f0fdf4" />
+              <StatCard icon="hand-coin" label="Pending received" value={currencyINR(stats.pendingPaymentsReceived)} bgColor="#f5f3ff" />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="chart-line" label="Expense" value={currencyINR(stats.expense)} bgColor="#fff5f5" />
+              <StatCard icon="wallet" label="In-hand cash" value={currencyINR(stats.inHandCash)} bgColor="#ecfeff" />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Inventory</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="water" label="20L full" value={stats.stock20L} />
+              <StatCard icon="bottle-wine" label="Empty cans" value={stats.stock20LEmpty} />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="bottle-soda-outline" label="Extra cans" value={stats.stock20LExtra} />
+              <StatCard icon="warehouse" label="Total stock" value={stats.stockTotal} />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Customers</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="home-account" label="Residence" value={stats.customersResidence} />
+              <StatCard icon="store" label="Shop" value={stats.customersShop} />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="party-popper" label="Party" value={stats.customersParty} />
+              <StatCard icon="account-multiple" label="Total customers" value={stats.customers} />
+            </View>
+          </View>
+
+          <View style={{ height: 24 }} />
         </ScrollView>
         )}
       </DrawerLayout>
@@ -332,10 +435,29 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   welcome: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 20,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  snapshotDate: {
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  datePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f0',
   },
   statsGrid: {
     marginBottom: 16,
@@ -343,7 +465,15 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    columnGap: 12,
+    marginBottom: 14,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 4,
+    marginBottom: 8,
   },
   drawerTitle: {
     fontSize: 18,

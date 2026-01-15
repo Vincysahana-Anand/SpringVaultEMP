@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,13 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuth, signOut } from '@react-native-firebase/auth';
-import { getFirestore, collection, query, where, getDocs, orderBy, limit } from '@react-native-firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, limit } from '@react-native-firebase/firestore';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getOrders } from '../services/orderService';
-import { getExpenses } from '../services/expenseService';
 import { getCustomers } from '../services/customerService';
 import { getStocks } from '../services/stockService';
 import { getISTDate } from '../utils/dateUtils';
 import { StatCard } from '../shared/components/StatCard';
-import { getIconColor } from '../shared/icons/colorMap';
 import { MenuItem } from '../shared/components/MenuItem';
 import { EdgeIndicator } from '../shared/components/EdgeIndicator';
 import { currencyINR } from '../utils/format';
@@ -37,15 +35,17 @@ import PastSalesScreen from './PastSalesScreen';
 import PastExpensesScreen from './PastExpensesScreen';
 
 const logo = require('../assets/banner.png');
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 export default function EmployeeDashboard() {
   const [stats, setStats] = useState({
     totalDeliveries: 0,
     pendingDeliveries: 0,
-    totalEarnings: 0,
+    deliveredToday: 0,
     todayEarnings: 0,
-    stock: 0,
+    totalEarnings: 0,
+    stock20L: 0,
+    stockTotal: 0,
+    customers: 0,
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Home');
@@ -53,6 +53,11 @@ export default function EmployeeDashboard() {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [isAdmin, setIsAdmin] = useState(false);
   const [userName, setUserName] = useState('');
+  const [snapshotDate, setSnapshotDate] = useState<Date>(() => {
+    const today = getISTDate();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
 
   useEffect(() => {
     loadEmployeeData();
@@ -99,38 +104,48 @@ export default function EmployeeDashboard() {
   const loadEmployeeData = async () => {
     try {
       setLoading(true);
+      const today = getISTDate();
+      today.setHours(0, 0, 0, 0);
+      setSnapshotDate(today);
 
       // Fetch orders assigned to employee
       const ordersResult = await getOrders();
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
       const totalDeliveries = orders.length;
       const pendingDeliveries = orders.filter(o => !o.deliveredAt).length;
-      const completedDeliveries = orders.filter(o => o.deliveredAt).length;
 
-      // Calculate earnings from orders
+      const deliveredTodayOrders = orders.filter((o) => {
+        if (!o.deliveredAt) return false;
+        const deliveredDate = parseDeliveredDate(o.deliveredAt);
+        if (!deliveredDate) return false;
+        return isSameDay(deliveredDate, today);
+      });
+      const deliveredToday = deliveredTodayOrders.length;
+
+      // Earnings based on delivered orders (10% of amountPaid)
       const totalEarnings = orders.reduce((sum, o) => sum + (o.amountPaid || 0) * 0.1, 0);
-
-      // Get today's earnings (using IST)
-      const today = getISTDate();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const expensesResult = await getExpenses({ type: 'today' });
-      const expenses = Array.isArray(expensesResult) ? expensesResult : [];
-      const todayEarnings = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const todayEarnings = deliveredTodayOrders.reduce((sum, o) => sum + (o.amountPaid || 0) * 0.1, 0);
 
       // Fetch stocks
       const stocksResult = await getStocks();
       const stocks = Array.isArray(stocksResult) ? stocksResult : [];
-      const totalStock = stocks.reduce((sum, s) => sum + (s.quantity || 0), 0);
+      const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20l'));
+      const totalStock = (stock20L?.total as number | undefined) ?? (stock20L?.quantity || 0);
+      const stock20LQty = stock20L?.quantity || 0;
+
+      // Customers count
+      const customersResult = await getCustomers();
+      const customers = Array.isArray(customersResult) ? customersResult : [];
 
       setStats({
         totalDeliveries,
         pendingDeliveries,
-        totalEarnings,
+        deliveredToday,
         todayEarnings,
-        stock: totalStock,
+        totalEarnings,
+        stock20L: stock20LQty,
+        stockTotal: totalStock,
+        customers: customers.length,
       });
 
       setLoading(false);
@@ -225,6 +240,26 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const snapshotLabel = useMemo(() => {
+    return snapshotDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }, [snapshotDate]);
+
+  const parseDeliveredDate = (deliveredAt?: string): Date | null => {
+    if (!deliveredAt) return null;
+    const datePart = deliveredAt.split(',')[0]?.trim();
+    if (!datePart) return null;
+    const [dd, mm, yy] = datePart.split('/');
+    const yearNum = parseInt(yy, 10);
+    const year = yearNum < 50 ? 2000 + yearNum : 1900 + yearNum;
+    const month = parseInt(mm, 10) - 1;
+    const day = parseInt(dd, 10);
+    const parsed = new Date(year, month, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
   return (
     <SafeAreaView style={styles.container}>
       <EdgeIndicator />
@@ -277,51 +312,51 @@ export default function EmployeeDashboard() {
               <RefreshControl refreshing={loading} onRefresh={loadEmployeeData} />
             }
           >
-          {/* Welcome */}
-          <Text style={styles.welcome}>Welcome, {userName}</Text>
-
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard
-                icon="truck"
-                label="Total Deliveries"
-                value={stats.totalDeliveries}
-              />
-              <StatCard
-                icon="clock"
-                label="Pending Deliveries"
-                value={stats.pendingDeliveries}
-              />
-            </View>
-            <View style={styles.statsRow}>
-              <StatCard
-                icon="water"
-                label="Stock"
-                value={stats.stock}
-                subLabel="Bottles"
-              />
-              <StatCard
-                icon="wallet"
-                label="Today's Earnings"
-                value={currencyINR(stats.todayEarnings)}
-              />
+          <View style={styles.topRow}>
+            <Text style={styles.welcome}>Welcome, {userName || 'Employee'}</Text>
+            <View style={styles.datePill}>
+              <MaterialCommunityIcons name="calendar" size={16} color="#475569" />
+              <Text style={styles.snapshotDate}>{snapshotLabel}</Text>
             </View>
           </View>
 
-          {/* Total Earnings */}
+          <Text style={styles.sectionLabel}>Deliveries</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statsRow}>
-              <StatCard
-                icon="cash"
-                label="Total Earnings"
-                value={currencyINR(stats.totalEarnings)}
-                bgColor="#f0fdf4"
-              />
+              <StatCard icon="clock-outline" label="Pending deliveries" value={stats.pendingDeliveries} />
+              <StatCard icon="truck-check" label="Delivered today" value={stats.deliveredToday} />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="truck" label="Total deliveries" value={stats.totalDeliveries} />
+              <View style={{ flex: 1 }} />
             </View>
           </View>
 
-          <View style={{ height: 40 }} />
+          <Text style={styles.sectionLabel}>Earnings</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="wallet" label="Today" value={currencyINR(stats.todayEarnings)} />
+              <StatCard icon="cash" label="Total" value={currencyINR(stats.totalEarnings)} bgColor="#f0fdf4" />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Inventory</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="water" label="20L full" value={stats.stock20L} />
+              <StatCard icon="warehouse" label="Total stock" value={stats.stockTotal} />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Customers</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="account-multiple" label="Total customers" value={stats.customers} />
+              <View style={{ flex: 1 }} />
+            </View>
+          </View>
+
+          <View style={{ height: 24 }} />
         </ScrollView>
         )}
       </DrawerLayout>
@@ -337,15 +372,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingVertical: 20,
   },
   statsGrid: {
     marginBottom: 16,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    columnGap: 12,
+    marginBottom: 14,
   },
   drawerTitle: {
     fontSize: 12,
@@ -357,9 +393,35 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   welcome: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 20,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  snapshotDate: {
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  datePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f0',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 4,
+    marginBottom: 8,
   },
 });

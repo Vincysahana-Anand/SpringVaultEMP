@@ -20,7 +20,6 @@ export function StatCard({ icon, label, value, subLabel, bgColor = '#fff' }: Sta
         <Text style={styles.statLabel}>{label}</Text>
       </View>
       <Text style={styles.statValue}>{value}</Text>
-      {subLabel && <Text style={styles.subLabel}>{subLabel}</Text>}
     </View>
   );
 }
@@ -49,19 +48,14 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6b7280',
     fontWeight: '500',
     flex: 1,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
-  },
-  subLabel: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 4,
   },
 });
