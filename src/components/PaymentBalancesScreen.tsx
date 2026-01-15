@@ -8,6 +8,7 @@ import { updateSalesRecord } from '../services/salesService';
 import { getISTDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
+import PaymentHistoryScreen from './PaymentHistoryScreen';
 
 interface Props { onBack?: () => void; }
 
@@ -23,6 +24,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const [payAmount, setPayAmount] = useState('');
   const [payRef, setPayRef] = useState('');
   const [submittingPay, setSubmittingPay] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -219,6 +221,10 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     );
   }
 
+  if (showHistory) {
+    return <PaymentHistoryScreen onBack={() => setShowHistory(false)} />;
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -228,6 +234,9 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           </TouchableOpacity>
         ) : null}
         <Text style={styles.headerTitle}>Payment Balances</Text>
+        <TouchableOpacity onPress={() => setShowHistory(true)} style={styles.historyBtn}>
+          <MaterialCommunityIcons name="history" size={20} color="#0f172a" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchBar}>
@@ -346,7 +355,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingTop: 8 },
   backBtn: { padding: 6, marginRight: 6 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', flex: 1 },
+  historyBtn: { padding: 6, marginLeft: 6 },
   searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginBottom: 8, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fff', gap: 8 },
   searchInput: { flex: 1, color: '#0f172a', paddingVertical: 0 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },

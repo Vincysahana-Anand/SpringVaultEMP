@@ -16,6 +16,7 @@ export interface SalesRecord {
   deliveredCount?: number;
   cashBillsPayment?: number;
   onlineBillsPayment?: number;
+  emptyReturned?: number;
 }
 
 /**
@@ -45,7 +46,8 @@ export const updateSalesRecord = async (
   ordersCount?: number,
   deliveredCount?: number,
   cashBillsPayment?: number,
-  onlineBillsPayment?: number
+  onlineBillsPayment?: number,
+  emptyReturned?: number,
 ): Promise<true | ServiceError> => {
   try {
     const db = getFirestore();
@@ -73,6 +75,7 @@ export const updateSalesRecord = async (
         pendingPaymentReceived: (existingData.pendingPaymentReceived || 0) + (pendingPaymentReceived || 0),
         cashBillsPayment: (existingData.cashBillsPayment || 0) + (cashBillsPayment || 0),
         onlineBillsPayment: (existingData.onlineBillsPayment || 0) + (onlineBillsPayment || 0),
+        emptyReturned: (existingData.emptyReturned || 0) + (emptyReturned || 0),
       };
 
       await updateDoc(salesDocRef, updatedData);
@@ -92,6 +95,7 @@ export const updateSalesRecord = async (
         pendingPaymentReceived: pendingPaymentReceived || 0,
         cashBillsPayment: cashBillsPayment || 0,
         onlineBillsPayment: onlineBillsPayment || 0,
+        emptyReturned: emptyReturned || 0,
       };
 
       await setDoc(salesDocRef, newSalesRecord);
