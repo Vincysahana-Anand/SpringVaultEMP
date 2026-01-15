@@ -65,13 +65,21 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
 
   useEffect(() => { load(); }, []);
 
+  const buildFullAddress = (customer: Customer) =>
+    [customer.doorNumber, customer.floor, customer.street, customer.area]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return customers;
     const q = searchQuery.toLowerCase();
     return customers.filter(c => {
+      const fullAddress = buildFullAddress(c).toLowerCase();
       if (c.name?.toLowerCase().includes(q)) return true;
       if (c.mobile?.includes(q)) return true;
-      if ((c.area || '').toLowerCase().includes(q)) return true;
+      if (fullAddress.includes(q)) return true;
+      if (c.alternateContacts?.some(contact => contact?.toLowerCase().includes(q))) return true;
       return false;
     });
   }, [customers, searchQuery]);
@@ -181,20 +189,24 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     }
   };
 
-  const renderItem = ({ item }: { item: Customer }) => (
-    <TouchableOpacity style={styles.card} onPress={() => setSelectedCustomer(item)}>
-      <View style={styles.row}>
-        <MaterialCommunityIcons name="wallet" size={20} color="#0ea5e9" />
-        <Text style={styles.title}>{item.name}</Text>
-        <Text style={[styles.balance, { color: (item.balance || 0) >= 0 ? '#16a34a' : '#ef4444' }]}>₹{item.balance || 0}</Text>
-        <TouchableOpacity style={styles.payBtn} onPress={() => openPayModal(item)}>
-          <MaterialCommunityIcons name="cash-multiple" size={20} color="#0ea5e9" />
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.sub}>{item.mobile}</Text>
-      <Text style={styles.sub}>{item.area}</Text>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: { item: Customer }) => {
+    const fullAddress = buildFullAddress(item);
+
+    return (
+      <TouchableOpacity style={styles.card} onPress={() => setSelectedCustomer(item)}>
+        <View style={styles.row}>
+          <MaterialCommunityIcons name="wallet" size={20} color="#0ea5e9" />
+          <Text style={styles.title}>{item.name}</Text>
+          <Text style={[styles.balance, { color: (item.balance || 0) >= 0 ? '#16a34a' : '#ef4444' }]}>₹{item.balance || 0}</Text>
+          <TouchableOpacity style={styles.payBtn} onPress={() => openPayModal(item)}>
+            <MaterialCommunityIcons name="cash-multiple" size={20} color="#0ea5e9" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.sub}>{item.mobile}</Text>
+        <Text style={styles.sub}>{fullAddress || 'No address provided'}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   if (selectedCustomer) {
     return (
