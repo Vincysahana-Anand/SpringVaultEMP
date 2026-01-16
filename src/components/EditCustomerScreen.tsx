@@ -30,6 +30,9 @@ interface Customer {
   customerType?: string;
   billingType?: string;
   price?: number;
+  '1lPrice'?: number;
+  '500mlPrice'?: number;
+  '300mlPrice'?: number;
   balance?: number;
 }
 
@@ -297,6 +300,49 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
             editable={!loading}
           />
         </View>
+
+        {formData.customerType === 'Shop' || formData.customerType === 'Party' ? (
+          <>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>1L Price (₹)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 1L price"
+                placeholderTextColor={colors.gray[400]}
+                value={(formData['1lPrice'] ?? '').toString()}
+                onChangeText={(value) => updateField('1lPrice', value ? parseInt(value) : 0)}
+                keyboardType="decimal-pad"
+                editable={!loading}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>500ml Price (₹)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 500ml price"
+                placeholderTextColor={colors.gray[400]}
+                value={(formData['500mlPrice'] ?? '').toString()}
+                onChangeText={(value) => updateField('500mlPrice', value ? parseInt(value) : 0)}
+                keyboardType="decimal-pad"
+                editable={!loading}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>300ml Price (₹)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 300ml price"
+                placeholderTextColor={colors.gray[400]}
+                value={(formData['300mlPrice'] ?? '').toString()}
+                onChangeText={(value) => updateField('300mlPrice', value ? parseInt(value) : 0)}
+                keyboardType="decimal-pad"
+                editable={!loading}
+              />
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Balance</Text>

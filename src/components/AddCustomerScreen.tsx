@@ -21,6 +21,9 @@ export default function AddCustomerScreen({ onBack }: Props) {
   const [canHolding, setCanHolding] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [price, setPrice] = useState('');
+  const [oneLPrice, setOneLPrice] = useState('');
+  const [fiveHundredMlPrice, setFiveHundredMlPrice] = useState('');
+  const [threeHundredMlPrice, setThreeHundredMlPrice] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,6 +49,27 @@ export default function AddCustomerScreen({ onBack }: Props) {
       showError('Enter a valid price', { title: 'Validation' });
       return;
     }
+
+    const isShopOrParty = customerType === 'Shop' || customerType === 'Party';
+    const oneLPriceVal = oneLPrice.trim() ? parseInt(oneLPrice.trim(), 10) : undefined;
+    const fiveHundredMlPriceVal = fiveHundredMlPrice.trim() ? parseInt(fiveHundredMlPrice.trim(), 10) : undefined;
+    const threeHundredMlPriceVal = threeHundredMlPrice.trim() ? parseInt(threeHundredMlPrice.trim(), 10) : undefined;
+
+    if (isShopOrParty) {
+      if (oneLPrice.trim() && (isNaN(oneLPriceVal as any) || (oneLPriceVal as number) < 0)) {
+        showError('Enter a valid 1L price', { title: 'Validation' });
+        return;
+      }
+      if (fiveHundredMlPrice.trim() && (isNaN(fiveHundredMlPriceVal as any) || (fiveHundredMlPriceVal as number) < 0)) {
+        showError('Enter a valid 500ml price', { title: 'Validation' });
+        return;
+      }
+      if (threeHundredMlPrice.trim() && (isNaN(threeHundredMlPriceVal as any) || (threeHundredMlPriceVal as number) < 0)) {
+        showError('Enter a valid 300ml price', { title: 'Validation' });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       const res = await addCustomer({
@@ -63,6 +87,13 @@ export default function AddCustomerScreen({ onBack }: Props) {
         customerType,
         billingType: 'Cash',
         price: priceVal,
+        ...(isShopOrParty
+          ? {
+              ...(oneLPriceVal !== undefined ? { '1lPrice': oneLPriceVal } : null),
+              ...(fiveHundredMlPriceVal !== undefined ? { '500mlPrice': fiveHundredMlPriceVal } : null),
+              ...(threeHundredMlPriceVal !== undefined ? { '300mlPrice': threeHundredMlPriceVal } : null),
+            }
+          : null),
         canHolding: canVal,
         extraCanHolding: 0,
         balance: 0,
@@ -152,6 +183,43 @@ export default function AddCustomerScreen({ onBack }: Props) {
         <Text style={styles.label}>Price</Text>
         <TextInput style={styles.input} value={price} onChangeText={setPrice} placeholder="₹" keyboardType="number-pad" />
       </View>
+
+      {customerType === 'Shop' || customerType === 'Party' ? (
+        <>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>1L Price (₹)</Text>
+            <TextInput
+              style={styles.input}
+              value={oneLPrice}
+              onChangeText={setOneLPrice}
+              placeholder="₹"
+              keyboardType="number-pad"
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>500ml Price (₹)</Text>
+            <TextInput
+              style={styles.input}
+              value={fiveHundredMlPrice}
+              onChangeText={setFiveHundredMlPrice}
+              placeholder="₹"
+              keyboardType="number-pad"
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>300ml Price (₹)</Text>
+            <TextInput
+              style={styles.input}
+              value={threeHundredMlPrice}
+              onChangeText={setThreeHundredMlPrice}
+              placeholder="₹"
+              keyboardType="number-pad"
+            />
+          </View>
+        </>
+      ) : null}
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.secondaryBtn} onPress={onBack} disabled={loading}>

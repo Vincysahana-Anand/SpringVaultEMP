@@ -31,6 +31,9 @@ interface Customer {
   customerType?: string;
   billingType?: string;
   price?: number;
+  '1lPrice'?: number;
+  '500mlPrice'?: number;
+  '300mlPrice'?: number;
   balance?: number;
 }
 
@@ -53,6 +56,8 @@ export default function CustomerDetailsScreen({
 }: CustomerDetailsScreenProps) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const isShopOrParty = ['shop', 'party'].includes(String(customer.customerType || '').toLowerCase());
 
   React.useEffect(() => {
     const handleBackPress = () => {
@@ -277,6 +282,55 @@ export default function CustomerDetailsScreen({
               </View>
               <Text style={styles.detailValue}>₹{customer.price || 0}/Can</Text>
             </View>
+
+            {isShopOrParty ? (
+              <>
+                <View style={styles.divider} />
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <MaterialCommunityIcons
+                      name="tag-outline"
+                      size={20}
+                      color={colors.gray[600]}
+                      style={styles.detailIcon}
+                    />
+                    <Text style={styles.detailLabel}>1L Price</Text>
+                  </View>
+                  <Text style={styles.detailValue}>₹{customer['1lPrice'] || 0}</Text>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <MaterialCommunityIcons
+                      name="tag-outline"
+                      size={20}
+                      color={colors.gray[600]}
+                      style={styles.detailIcon}
+                    />
+                    <Text style={styles.detailLabel}>500ml Price</Text>
+                  </View>
+                  <Text style={styles.detailValue}>₹{customer['500mlPrice'] || 0}</Text>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <MaterialCommunityIcons
+                      name="tag-outline"
+                      size={20}
+                      color={colors.gray[600]}
+                      style={styles.detailIcon}
+                    />
+                    <Text style={styles.detailLabel}>300ml Price</Text>
+                  </View>
+                  <Text style={styles.detailValue}>₹{customer['300mlPrice'] || 0}</Text>
+                </View>
+              </>
+            ) : null}
           </View>
         </View>
 

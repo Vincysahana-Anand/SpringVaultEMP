@@ -274,19 +274,23 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
 
     try {
       setSubmittingOrder(true);
+
+      const customerName = orderCustomer.name;
+      const selectedProductId = orderProduct.id;
       
       // Check for existing orders for this customer
       const ordersResult = await getOrders();
       
       if (Array.isArray(ordersResult)) {
-        const existingOrder = ordersResult.find(
-          (order: Order) => order.customerId === orderCustomer.id
-        );
+        const existingOrder = ordersResult.find((order: Order) => {
+          return order.customerId === orderCustomer.id && order.productId === selectedProductId;
+        });
         
         if (existingOrder) {
           setSubmittingOrder(false);
+          handleCloseOrderModal();
           showInfo(
-            `An order is already pending for ${orderCustomer.name}. Product: ${existingOrder.productName} (Qty: ${existingOrder.quantity})`,
+            `An order is already pending for ${customerName}. Product: ${existingOrder.productName} (Qty: ${existingOrder.quantity})`,
             { title: 'Order Already Pending', durationMs: 3500 }
           );
           return;
@@ -350,7 +354,7 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
         handleCloseOrderModal();
         
         // Show success message
-        showSuccess(`Order placed successfully for ${orderCustomer.name}`);
+        showSuccess(`Order placed successfully for ${customerName}`);
       } else {
         // Show error message
         showError('Failed to place order. Please try again.');
@@ -791,11 +795,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingVertical: spacing[10],
-    paddingHorizontal: spacing[12],
+    paddingVertical: spacing[8],
+    paddingHorizontal: spacing[10],
     backgroundColor: colors.bg.white,
     flex: 1,
-    minWidth: 80,
+    minWidth: 70,
   },
   productButtonActive: {
     borderColor: colors.primary[500],
@@ -805,7 +809,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productButtonText: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.gray[700],
     textAlign: 'center',
