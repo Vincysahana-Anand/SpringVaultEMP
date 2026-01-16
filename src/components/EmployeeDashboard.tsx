@@ -37,6 +37,7 @@ import PaymentBalancesScreen from './PaymentBalancesScreen';
 import ExtraCanHoldingsScreen from './ExtraCanHoldingsScreen';
 import PastSalesScreen from './PastSalesScreen';
 import PastExpensesScreen from './PastExpensesScreen';
+import DropletLoader from './DropletLoader';
 
 const logo = require('../assets/banner.png');
 
@@ -63,6 +64,7 @@ export default function EmployeeDashboard() {
     customersParty: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('dashboard');
@@ -273,11 +275,15 @@ export default function EmployeeDashboard() {
     };
 
     const handleSignOut = async () => {
+      if (signingOut) return;
       try {
+        setSigningOut(true);
+        closeDrawer();
         await signOut(getAuth());
       } catch (e) {
         const err = handleServiceError(e, 'signOut');
         showError(err.message);
+        setSigningOut(false);
       }
     };
 
@@ -308,9 +314,10 @@ export default function EmployeeDashboard() {
         <TouchableOpacity
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
           onPress={handleSignOut}
+          disabled={signingOut}
         >
           <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
-          <Text style={{ color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
+          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{signingOut ? 'Signing out...' : 'Sign Out'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -357,6 +364,7 @@ export default function EmployeeDashboard() {
     return (
       <SafeAreaView style={styles.container}>
         <EdgeIndicator />
+        <DropletLoader visible={signingOut} />
         <DrawerLayout
           drawerOpen={drawerOpen}
           onDrawerOpen={openDrawer}

@@ -26,6 +26,7 @@ import { currencyINR } from '../utils/format';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import { colors, spacing, elevation, typography, borderRadius } from '../shared/theme/theme';
 import { showError } from '../shared/feedback/messageBus';
+import DropletLoader from './DropletLoader';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -45,6 +46,7 @@ export default function CustomerDashboard() {
   });
   const [todayBalance, setTodayBalance] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userName, setUserName] = useState('');
@@ -175,11 +177,15 @@ export default function CustomerDashboard() {
   // Using shared MenuItem and TabButton
 
   const handleSignOut = async () => {
+    if (signingOut) return;
     try {
+      setSigningOut(true);
+      closeDrawer();
       await signOut(getAuth());
     } catch (e) {
       const err = handleServiceError(e, 'signOut');
       showError(err.message);
+      setSigningOut(false);
     }
   };
 
@@ -203,6 +209,7 @@ export default function CustomerDashboard() {
   return (
     <SafeAreaView style={styles.container}>
       <EdgeIndicator />
+      <DropletLoader visible={signingOut} />
       <DrawerLayout
         drawerOpen={drawerOpen}
         onDrawerOpen={openDrawer}

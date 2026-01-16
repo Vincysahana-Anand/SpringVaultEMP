@@ -36,6 +36,7 @@ import PastSalesScreen from './PastSalesScreen';
 import PastExpensesScreen from './PastExpensesScreen';
 import { getISTDate } from '../utils/dateUtils';
 import { getOrders } from '../services/orderService';
+import DropletLoader from './DropletLoader';
 
 const logo = require('../assets/banner.png');
 
@@ -62,6 +63,7 @@ export default function OwnerDashboard() {
     customersParty: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('dashboard');
@@ -128,11 +130,15 @@ export default function OwnerDashboard() {
   };
 
   const handleSignOut = async () => {
+    if (signingOut) return;
     try {
+      setSigningOut(true);
+      closeDrawer();
       await signOut(getAuth());
     } catch (e) {
       const err = handleServiceError(e, 'signOut');
       showError(err.message);
+      setSigningOut(false);
     }
   };
 
@@ -292,9 +298,10 @@ export default function OwnerDashboard() {
       <TouchableOpacity
         style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
         onPress={handleSignOut}
+        disabled={signingOut}
       >
         <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
-        <Text style={{ color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
+        <Text style={{ color: '#ef4444', fontWeight: '700' }}>{signingOut ? 'Signing out...' : 'Sign Out'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -341,6 +348,7 @@ export default function OwnerDashboard() {
   return (
     <SafeAreaView style={styles.container}>
       <EdgeIndicator />
+      <DropletLoader visible={signingOut} />
       <DrawerLayout
         drawerOpen={drawerOpen}
         onDrawerOpen={openDrawer}
