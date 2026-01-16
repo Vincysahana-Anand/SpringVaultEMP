@@ -37,6 +37,9 @@ import PastExpensesScreen from './PastExpensesScreen';
 import { getISTDate } from '../utils/dateUtils';
 import { getOrders } from '../services/orderService';
 import DropletLoader from './DropletLoader';
+import CounterSaleScreen from './CounterSaleScreen';
+import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
+import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
 
 const logo = require('../assets/banner.png');
 
@@ -97,6 +100,12 @@ export default function OwnerDashboard() {
         setDrawerOpen(false);
         return true;
       }
+
+      if (currentScreen === 'counterSaleHistory') {
+        setCurrentScreen('counterSale');
+        return true;
+      }
+
       if (
         currentScreen === 'customers' ||
         currentScreen === 'deliveries' ||
@@ -106,7 +115,8 @@ export default function OwnerDashboard() {
         currentScreen === 'paymentBalances' ||
         currentScreen === 'extraCan' ||
         currentScreen === 'pastSales' ||
-        currentScreen === 'pastExpenses'
+        currentScreen === 'pastExpenses' ||
+        currentScreen === 'counterSale'
       ) {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
@@ -421,10 +431,18 @@ export default function OwnerDashboard() {
             }}
           />
         ) : currentScreen === 'counterSale' ? (
-          <PlaceholderCard
-            title="Counter Sale"
-            subtitle="Quick counter billing will appear here."
-            icon="cart-outline"
+          <CounterSaleScreen
+            onBack={() => {
+              setCurrentScreen('dashboard');
+              setActiveTab('Home');
+              fetchDashboardStats();
+            }}
+            onViewHistory={() => setCurrentScreen('counterSaleHistory')}
+          />
+        ) : currentScreen === 'counterSaleHistory' ? (
+          <CustomerPurchaseHistoryScreen
+            customer={{ id: COUNTER_SALES_CUSTOMER_ID, name: COUNTER_SALES_CUSTOMER_NAME }}
+            onBack={() => setCurrentScreen('counterSale')}
           />
         ) : (
           <ScrollView
