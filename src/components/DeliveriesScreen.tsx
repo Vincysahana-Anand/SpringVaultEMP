@@ -23,6 +23,7 @@ import { getCustomers, Customer, updateCustomer } from '../services/customerServ
 import { addPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
 import { updateSalesRecord } from '../services/salesService';
 import { addDailyRecord, getDailyRecordsByDate, DailyRecordEntry } from '../services/dailyRecordService';
+import { completeDeliveryTransaction } from '../services/deliveryService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
@@ -308,220 +309,37 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       newStockExtraCan: newStockExtraCan,
     });
 
+    // LEGACY (non-atomic) implementation kept for reference.
+    // It performed a sequence of independent writes across multiple documents.
+    // This is intentionally replaced by an all-or-nothing Firestore transaction.
+    //
+    // try {
+    //   ... updateCustomer -> updateStock -> addPurchaseHistory -> addOrder (partial) -> updateSalesRecord -> addDailyRecord -> deleteOrder
+    // } catch (error) { ... }
+
     try {
-      console.log('Starting delivery submission...');
-      
-      // Step 1: Update customer balance and extra can holding
-      console.log('Step 1: Updating customer...');
-      const updateCustomerResult = await updateCustomer(customer.id!, {
-        balance: newCustomerBalance,
-        extraCanHolding: newExtraCanHolding,
-      });
-      if (updateCustomerResult !== true) {
-        console.error('Customer update failed:', updateCustomerResult);
-        handleServiceError(updateCustomerResult, 'updateCustomer');
-        setSubmitting(false);
-        return;
-      }
-      console.log('Customer updated successfully');
-
-      // Step 2: Update stock
-      console.log('Step 2: Updating stock...');
-      const updateStockResult = await updateStock(currentStock.id!, {
-        quantity: newQuantity,
-        empty: newEmpty,
-        extraCan: newStockExtraCan,
-      });
-      if (updateStockResult !== true) {
-        console.error('Stock update failed:', updateStockResult);
-        handleServiceError(updateStockResult, 'updateStock');
-        setSubmitting(false);
-        return;
-      }
-      console.log('Stock updated successfully');
-
-      // Step 3: Save purchase history
-      console.log('Step 3: Saving purchase history...');
-      const deliveredDate = getISTDate();
-      const formattedDeliveredDate = deliveredDate.toLocaleString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-      const purchaseRecord: PurchaseRecord = {
-        product: selectedOrder.productName,
-        deliveredQty: fullBottles,
-        emptyQty: emptyBottles,
-        orderedAt: selectedOrder.orderedAt || new Date(selectedOrder.timeStamp || 0).toISOString(),
-        deliveredAt: formattedDeliveredDate,
-        billAmount: billAmountValue,
+      const txResult = await completeDeliveryTransaction({
+        order: selectedOrder,
+        fullBottlesDelivered: fullBottles,
+        emptyBottlesCollected: emptyBottles,
         amountPaid: amountPaidValue,
-        paymentMethod: paymentMethod,
-        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef, 10) || 0 : 0
-      };
-
-      console.log('Purchase record to save:', purchaseRecord);
-
-      const purchaseHistoryResult = await addPurchaseHistory(customer.id!, purchaseRecord);
-      if (purchaseHistoryResult !== true) {
-        console.error('Purchase history save failed:', purchaseHistoryResult);
-        handleServiceError(purchaseHistoryResult, 'addPurchaseHistory');
-        setSubmitting(false);
-        return;
-      }
-
-      // Step 4: Handle remaining quantity and delete original order
-      const originalOrderQuantity = Number(selectedOrder.quantity || 0);
-      const remainingQuantity = Math.max(originalOrderQuantity - fullBottles, 0);
-
-      if (remainingQuantity > 0 && fullBottles < originalOrderQuantity) {
-        console.log('Partial delivery detected. Creating new order for remaining quantity:', remainingQuantity);
-        const newOrderTimestamp = getISTDate();
-        const formattedNewOrderedAt = newOrderTimestamp.toLocaleString('en-GB', {
-          day: '2-digit',
-          month: '2-digit',
-          year: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-
-        const newOrderPayload: Order = {
-          customerId: selectedOrder.customerId,
-          customerName: selectedOrder.customerName,
-          productId: selectedOrder.productId,
-          productName: selectedOrder.productName,
-          quantity: remainingQuantity,
-          paymentMethod: selectedOrder.paymentMethod || 'Pending',
-          amountPaid: 0,
-          orderedAt: formattedNewOrderedAt,
-          address: selectedOrder.address,
-          mobile: selectedOrder.mobile,
-          timeStamp: newOrderTimestamp,
-        };
-
-        const addOrderResult = await addOrder(newOrderPayload);
-        if (addOrderResult !== true) {
-          console.error('Creating remaining-quantity order failed:', addOrderResult);
-          handleServiceError(addOrderResult, 'addOrder');
-          setSubmitting(false);
-          return;
-        }
-        console.log('Remaining-quantity order created successfully');
-      }
-
-      // Step 5: Update sales record
-      console.log('Step 5: Updating sales record...');
-      const isDeliveredCan = !!(selectedOrder.productName && 
-        selectedOrder.productName.toLowerCase().includes('20') && 
-        selectedOrder.productName.toLowerCase().includes('liter'));
-      
-      const saleAmount = customerPrice * fullBottles;
-      const pendingPaymentReceived = saleAmount < amountPaidValue ? amountPaidValue - saleAmount : 0;
-      const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaidValue - pendingPaymentReceived) : 0;
-      const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaidValue - pendingPaymentReceived) : 0;
-      const ordersCount = 0;
-      const deliveredCount = 1;
-      console.log('Sales values before update:', {
-        fullBottles: Number(fullBottles),
-        emptyBottles: Number(emptyBottles),
-        cashPaidValue: Number(cashPaidValue),
-        onlinePaidValue: Number(onlinePaidValue),
-        billAmountValue: Number(billAmountValue),
-        saleAmount: Number(saleAmount),
         paymentMethod,
-        ordersCount: 0,
-        deliveredCount: 1,
+        paymentRef,
       });
 
-      
-      
-      const salesUpdateResult = await updateSalesRecord(
-        Number(fullBottles),
-        Number(emptyBottles),
-        Number(cashPaidValue),
-        Number(onlinePaidValue),
-        Number(billAmountValue),
-        isDeliveredCan,
-        Number(saleAmount),
-        Number(pendingPaymentReceived),
-        ordersCount,
-        deliveredCount
-      );
-      if (salesUpdateResult !== true) {
-        console.error('Sales record update failed:', salesUpdateResult);
-        handleServiceError(salesUpdateResult, 'updateSalesRecord');
+      if (txResult && typeof txResult === 'object' && 'code' in txResult && 'message' in txResult) {
+        handleServiceError(txResult, 'completeDeliveryTransaction');
         setSubmitting(false);
         return;
       }
-      console.log('Sales record updated successfully');
 
-      // Step 6: Add to daily record before deleting
-      console.log('Step 6: Adding to daily record...');
-      // Build daily record entry (exclude undefined values for Firebase compatibility)
-      const dailyRecordEntry: DailyRecordEntry = {
-        customerId: customer.id || '',
-        customerName: selectedOrder.customerName,
-        customerAddress: selectedOrder.address,
-        customerMobile: selectedOrder.mobile,
-        product: selectedOrder.productName,
-        orderedAt: selectedOrder.orderedAt || '',
-        deliveredAt: formattedDeliveredDate,
-        orderedQty: selectedOrder.quantity || 0,
-        deliveredQty: fullBottles,
-        emptyQty: emptyBottles,
-        billAmount: billAmountValue,
-        saleAmount: saleAmount,
-        amountPaid: amountPaidValue,
-        paymentMethod: paymentMethod,
-        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef, 10) || 0 : 0,
-        pendingPaymentReceived: pendingPaymentReceived,
-      };
-      
-      const dailyRecordResult = await addDailyRecord(selectedOrder.productId || '', dailyRecordEntry);
-      if (dailyRecordResult !== true) {
-        console.error('Daily record save failed:', dailyRecordResult);
-        handleServiceError(dailyRecordResult, 'addDailyRecord');
-        setSubmitting(false);
-        return;
-      }
-      console.log('Daily record added successfully');
-
-      console.log('Deleting original order...');
-      const deleteResult = await deleteOrder(selectedOrder.id!);
-      if (deleteResult !== true) {
-        console.error('Deleting original order failed:', deleteResult);
-        handleServiceError(deleteResult, 'deleteOrder');
-        setSubmitting(false);
-        return;
-      }
-      console.log('Original order deleted');
-
-      // Refresh local orders to reflect deletion/new order
       await loadOrders();
-
-      console.log('✅ All updates completed successfully:', {
-        customer: customer.id,
-        balance: newCustomerBalance,
-        extraCanHolding: newExtraCanHolding,
-        stock: currentStock.id,
-        newQuantity,
-        newEmpty,
-        newStockExtraCan,
-        purchaseRecord,
-        remainingQuantity,
-        salesUpdated: true,
-      });
-
       setSubmitting(false);
       handleCloseDeliveryModal();
       Alert.alert('Success', 'Delivery completed successfully', [{ text: 'OK' }]);
     } catch (error) {
       console.error('Error in handleSubmitDelivery:', error);
-      handleServiceError(error, 'completeDelivery');
+      handleServiceError(error, 'completeDeliveryTransaction');
       setSubmitting(false);
     }
   };
