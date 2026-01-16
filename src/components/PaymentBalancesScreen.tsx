@@ -52,14 +52,13 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const receiptRef = useRef<ViewShot | null>(null);
 
   const bannerImage = useMemo(() => require('../assets/banner.png'), []);
-  const shareBannerImage = useMemo(() => require('../assets/banner.jpg'), []);
+  const shareBannerImage = useMemo(() => require('../assets/banner.png'), []);
   const bannerSource = useMemo(() => {
     const resolved = Image.resolveAssetSource(bannerImage as any);
     const uri = resolved?.uri;
     return uri ? ({ uri } as any) : (bannerImage as any);
   }, [bannerImage]);
-  // For ViewShot capture, prefer the bundled require(...) directly. Some Android builds
-  // can render an empty space when using a resolved { uri } source.
+  // For ViewShot capture, use the bundled require(...) directly.
   const shareBannerSource = shareBannerImage as any;
 
   const getShareBannerDataUri = async (): Promise<string | null> => {
