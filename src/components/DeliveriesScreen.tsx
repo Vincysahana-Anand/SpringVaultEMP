@@ -88,19 +88,61 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     }
   }, [selectedOrder, customers]);
 
+  const getUnitPriceForCustomer = (
+    customer: Customer | null,
+    productId: string | undefined,
+    fallbackStockPrice: number
+  ) => {
+    const stockFallback = Number(fallbackStockPrice ?? 0) || 0;
+    if (!customer || !productId) return stockFallback;
+
+    const c: any = customer;
+    const getNum = (v: any) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    if (productId === '1L_CASE') {
+      const custom = c['1lPrice'];
+      const n = getNum(custom);
+      return n > 0 ? n : stockFallback;
+    }
+    if (productId === '500ML_CASE') {
+      const custom = c['500mlPrice'];
+      const n = getNum(custom);
+      return n > 0 ? n : stockFallback;
+    }
+    if (productId === '300ML_CASE') {
+      const custom = c['300mlPrice'];
+      const n = getNum(custom);
+      return n > 0 ? n : stockFallback;
+    }
+
+    // Default (20L and any other products): use the regular customer price.
+    const n = getNum((c as any).price);
+    return n > 0 ? n : stockFallback;
+  };
+
   const parsedFullBottlesForBill = parseInt(fullBottlesDelivered || '0', 10) || 0;
   const billCustomerBalance = Number(selectedCustomerData?.balance ?? 0) || 0;
-  const billCustomerPrice = Number(selectedCustomerData?.price ?? 0) || 0;
-  const billAmount = billCustomerBalance + billCustomerPrice * parsedFullBottlesForBill;
+  const billStockPrice = Number(
+    products.find((p: Stock) => p.id === selectedOrder?.productId)?.price ?? 0
+  ) || 0;
+  const billCustomerUnitPrice = getUnitPriceForCustomer(
+    selectedCustomerData,
+    selectedOrder?.productId,
+    billStockPrice
+  );
+  const billAmount = billCustomerBalance + billCustomerUnitPrice * parsedFullBottlesForBill;
   
   // Debug bill calculation
   if (showDeliveryModal && parsedFullBottlesForBill > 0) {
     console.log('Bill calculation debug:', {
       parsedFullBottlesForBill,
       billCustomerBalance,
-      billCustomerPrice,
+      billCustomerUnitPrice,
       billAmount,
-      calculated: billCustomerBalance + billCustomerPrice * parsedFullBottlesForBill,
+      calculated: billCustomerBalance + billCustomerUnitPrice * parsedFullBottlesForBill,
     });
   }
 
@@ -239,9 +281,29 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       return;
     }
     
+    // Fetch stock details for the product (used for both validation and pricing fallback)
+    const currentStock = products.find((p: Stock) => p.id === selectedOrder.productId);
+    if (!currentStock) {
+      setSubmitting(false);
+      showError('Stock not found for this product');
+      return;
+    }
+
+    const stockQtyAvailable = Number(currentStock.quantity ?? 0) || 0;
+    if (stockQtyAvailable <= 0) {
+      showError('Insufficient stock. Available: 0', { title: 'Stock' });
+      setSubmitting(false);
+      return;
+    }
+    if (stockQtyAvailable < fullBottles) {
+      showError(`Insufficient stock. Available: ${stockQtyAvailable}`, { title: 'Stock' });
+      setSubmitting(false);
+      return;
+    }
+
     const customerBalance = Number(customer.balance ?? 0) || 0;
-    const customerPrice = Number(customer.price ?? 0) || 0;
-    const billAmountValue = customerBalance + customerPrice * fullBottles;
+    const unitPrice = getUnitPriceForCustomer(customer, selectedOrder.productId, Number(currentStock.price ?? 0) || 0);
+    const billAmountValue = customerBalance + unitPrice * fullBottles;
     const newCustomerBalance = billAmountValue - amountPaidValue;
     
     // canHolding: number of cans customer SHOULD have
@@ -273,20 +335,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     console.log('Billing calculation', {
       customerName: selectedOrder.customerName,
       customerBalance,
-      customerPrice,
+      unitPrice,
       fullBottlesDelivered: fullBottles,
       billAmount: billAmountValue,
       amountPaid: amountPaidValue,
       newCustomerBalance,
     });
-
-    // Fetch stock details for the product
-    const currentStock = products.find((p: Stock) => p.id === selectedOrder.productId);
-    if (!currentStock) {
-      setSubmitting(false);
-      showError('Stock not found for this product');
-      return;
-    }
 
     // Calculate new stock values
     const currentQuantity = currentStock.quantity || 0;

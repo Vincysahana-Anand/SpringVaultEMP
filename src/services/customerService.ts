@@ -15,6 +15,10 @@ export interface Customer {
   customerType: 'Residence' | 'Shop' | 'Party';
   billingType: 'Cash' | 'Rotational Payment' | 'Monthly Payment' | 'Online';
   price: number;
+  // Optional per-product pricing (used for non-20L deliveries).
+  '1lPrice'?: number;
+  '500mlPrice'?: number;
+  '300mlPrice'?: number;
   canHolding: number;
   extraCanHolding?: number;
   balance?: number;

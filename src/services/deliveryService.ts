@@ -76,6 +76,33 @@ export async function completeDeliveryTransaction(
       order.productName.toLowerCase().includes('liter')
     );
 
+    const getUnitPriceForCustomer = (customerData: any, stockData: any, productId: string) => {
+      const stockFallback = Number(stockData?.price ?? 0) || 0;
+      const getNum = (v: any) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      if (productId === '1L_CASE') {
+        const custom = customerData?.['1lPrice'];
+        const n = getNum(custom);
+        return n > 0 ? n : stockFallback;
+      }
+      if (productId === '500ML_CASE') {
+        const custom = customerData?.['500mlPrice'];
+        const n = getNum(custom);
+        return n > 0 ? n : stockFallback;
+      }
+      if (productId === '300ML_CASE') {
+        const custom = customerData?.['300mlPrice'];
+        const n = getNum(custom);
+        return n > 0 ? n : stockFallback;
+      }
+
+      const n = getNum(customerData?.price);
+      return n > 0 ? n : stockFallback;
+    };
+
     const result = await runTransaction(db, async (tx) => {
       const [orderSnap, customerSnap, stockSnap, salesSnap, purchaseHistorySnap, dailyRecordSnap] =
         await Promise.all([
@@ -105,9 +132,9 @@ export async function completeDeliveryTransaction(
       const remainingQuantity = Math.max(originalOrderQuantity - fullBottlesDelivered, 0);
 
       const customerBalance = Number(customerData?.balance ?? 0) || 0;
-      const customerPrice = Number(customerData?.price ?? 0) || 0;
+      const unitPrice = getUnitPriceForCustomer(customerData, stockData, order.productId);
 
-      const billAmount = customerBalance + customerPrice * fullBottlesDelivered;
+      const billAmount = customerBalance + unitPrice * fullBottlesDelivered;
       const newCustomerBalance = billAmount - amountPaid;
 
       const canHolding = Number(customerData?.canHolding ?? 0) || 0;
@@ -119,6 +146,10 @@ export async function completeDeliveryTransaction(
       const currentQuantity = Number(stockData?.quantity ?? 0) || 0;
       const currentEmpty = Number(stockData?.empty ?? 0) || 0;
       const currentExtraCan = Number(stockData?.extraCan ?? 0) || 0;
+
+      if (fullBottlesDelivered > currentQuantity) {
+        throw new Error(`Insufficient stock. Available: ${currentQuantity}`);
+      }
 
       const newQuantity = currentQuantity - fullBottlesDelivered;
       const newEmpty = currentEmpty + emptyBottlesCollected;
@@ -161,7 +192,7 @@ export async function completeDeliveryTransaction(
       }
 
       // Sales record (daily aggregate)
-      const saleAmount = customerPrice * fullBottlesDelivered;
+      const saleAmount = unitPrice * fullBottlesDelivered;
       const pendingPaymentReceived = saleAmount < amountPaid ? amountPaid - saleAmount : 0;
       const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaid - pendingPaymentReceived) : 0;
       const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaid - pendingPaymentReceived) : 0;
