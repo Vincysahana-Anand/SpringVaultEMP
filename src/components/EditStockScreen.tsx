@@ -159,7 +159,7 @@ export default function EditStockScreen({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onGoBack} style={styles.backButton}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={colors.gray[800]} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Stock</Text>
         <View style={styles.headerSpacer} />
@@ -169,10 +169,9 @@ export default function EditStockScreen({
         {/* Product Info Card */}
         <View style={styles.productCard}>
           <View style={styles.productHeader}>
-            <MaterialCommunityIcons name="water" size={40} color={colors.primary[500]} />
+            <MaterialCommunityIcons name="water" size={18} color={colors.primary[500]} />
             <View style={styles.productInfo}>
               <Text style={styles.productName}>{stock.productName}</Text>
-              <Text style={styles.productId}>{stock.id}</Text>
             </View>
           </View>
         </View>
@@ -299,7 +298,10 @@ export default function EditStockScreen({
           {submitting ? (
             <ActivityIndicator color={colors.bg.white} size="small" />
           ) : (
-            <Text style={styles.buttonPrimaryText}>Save Changes</Text>
+            <>
+              <MaterialCommunityIcons name="check-circle" size={18} color={colors.bg.white} />
+              <Text style={styles.buttonPrimaryText}>Save Changes</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -316,56 +318,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[4],
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: colors.bg.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   backButton: {
-    padding: spacing[2],
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg.white,
   },
   headerTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.bg.dark,
+    fontSize: 16,
+    fontWeight: typography.fontWeight.bold,
+    color: '#0f172a',
   },
   headerSpacer: {
     width: 40,
   },
   content: {
     flex: 1,
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[6],
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   productCard: {
     backgroundColor: colors.bg.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing[6],
-    marginBottom: spacing[6],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   productHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[4],
+    gap: 10,
   },
   productInfo: {
     flex: 1,
   },
   productName: {
-    fontSize: typography.fontSize.lg,
+    fontSize: 14,
     fontWeight: typography.fontWeight.bold,
-    color: colors.bg.dark,
-    marginBottom: spacing[2],
-  },
-  productId: {
-    fontSize: typography.fontSize.sm,
-    color: colors.gray[600],
+    color: '#0f172a',
   },
   roleBadge: {
     flexDirection: 'row',
@@ -382,13 +380,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
   fieldGroup: {
-    marginBottom: spacing[6],
+    marginBottom: 14,
   },
   fieldLabel: {
-    fontSize: typography.fontSize.sm,
+    fontSize: 11,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.bg.dark,
-    marginBottom: spacing[2],
+    color: colors.gray[600],
+    marginBottom: 6,
   },
   disabledLabel: {
     color: colors.gray[500],
@@ -397,21 +395,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.white,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[4],
-    fontSize: typography.fontSize.base,
-    color: colors.bg.dark,
-    marginBottom: spacing[2],
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0f172a',
   },
   disabledInput: {
-    backgroundColor: colors.gray[100],
+    backgroundColor: '#f1f5f9',
     color: colors.gray[500],
-    borderColor: colors.gray[300],
+    borderColor: colors.border,
   },
   fieldHint: {
-    fontSize: typography.fontSize.xs,
+    fontSize: 11,
     color: colors.gray[500],
+    marginTop: 6,
   },
   noticeBox: {
     flexDirection: 'row',
@@ -432,36 +430,40 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flexDirection: 'row',
-    gap: spacing[4],
-    paddingHorizontal: spacing[6],
-    paddingVertical: spacing[4],
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: colors.bg.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   buttonSecondary: {
     flex: 1,
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.md,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.gray[200],
+    backgroundColor: colors.bg.white,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   buttonSecondaryText: {
-    fontSize: typography.fontSize.base,
+    fontSize: 13,
     fontWeight: typography.fontWeight.semibold,
     color: colors.gray[800],
   },
   buttonPrimary: {
     flex: 1,
-    paddingVertical: spacing[4],
-    borderRadius: borderRadius.md,
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.success[600],
+    backgroundColor: colors.primary[500],
   },
   buttonPrimaryText: {
-    fontSize: typography.fontSize.base,
+    fontSize: 13,
     fontWeight: typography.fontWeight.semibold,
     color: colors.bg.white,
   },
