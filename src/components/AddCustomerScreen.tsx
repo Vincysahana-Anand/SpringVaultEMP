@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, BackHandler } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { addCustomer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError, showSuccess } from '../shared/feedback/messageBus';
 
 interface Props {
   onBack?: () => void;
@@ -35,14 +36,14 @@ export default function AddCustomerScreen({ onBack }: Props) {
 
   const handleSave = async () => {
     if (!name.trim() || !mobile.trim() || !price) {
-      Alert.alert('Validation', 'Name, mobile, and price are required');
+      showError('Name, mobile, and price are required', { title: 'Validation' });
       return;
     }
     const priceVal = parseInt(price, 10);
     const canVal = parseInt(canHolding || '0', 10) || 0;
     const advanceVal = parseInt(advanceAmount || '0', 10) || 0;
     if (isNaN(priceVal) || priceVal < 0) {
-      Alert.alert('Validation', 'Enter a valid price');
+      showError('Enter a valid price', { title: 'Validation' });
       return;
     }
     try {
@@ -67,12 +68,15 @@ export default function AddCustomerScreen({ onBack }: Props) {
         balance: 0,
       });
       if (res !== undefined && typeof res === 'string') {
-        Alert.alert('Success', 'Customer added', [{ text: 'OK', onPress: onBack }]);
+        showSuccess('Customer added');
+        onBack?.();
       } else {
-        handleServiceError(res, 'addCustomer');
+        const err = handleServiceError(res, 'addCustomer');
+        showError(err.message);
       }
     } catch (e) {
-      handleServiceError(e, 'addCustomer');
+      const err = handleServiceError(e, 'addCustomer');
+      showError(err.message);
     } finally {
       setLoading(false);
     }

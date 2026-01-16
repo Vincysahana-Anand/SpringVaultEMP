@@ -10,12 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getAuth, signInWithEmailAndPassword } from '@react-native-firebase/auth';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import DropletLoader from './DropletLoader';
+import { showSuccess } from '../shared/feedback/messageBus';
 
 const banner = require('../assets/banner.png');
 
@@ -37,7 +37,7 @@ export default function Login({ onForgot }: { onForgot?: () => void }) {
     try {
       await signInWithEmailAndPassword(getAuth(), email.trim(), password);
       setLoading(false);
-      Alert.alert('Success', 'Signed in successfully');
+      showSuccess('Signed in successfully');
       // TODO: navigate to the app's authenticated area
     } catch (e: any) {
       setLoading(false);

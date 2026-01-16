@@ -12,6 +12,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getStocks, updateStock, Stock } from '../services/stockService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import EditStockScreen from './EditStockScreen';import DropletLoader from './DropletLoader';
 interface StockScreenProps {
   userRole?: 'owner' | 'employee';
@@ -79,10 +80,12 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
         const sorted = sortStocks(result);
         setStocks(sorted);
       } else {
-        handleServiceError(result, 'getStocks');
+        const err = handleServiceError(result, 'getStocks');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'loadStocks');
+      const err = handleServiceError(error, 'loadStocks');
+      showError(err.message);
     } finally {
       setLoading(false);
     }

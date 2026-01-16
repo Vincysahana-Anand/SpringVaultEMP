@@ -15,6 +15,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers, Customer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import ExtraCanHistoryScreen from './ExtraCanHistoryScreen';
 import { updateCustomer } from '../services/customerService';
@@ -73,10 +74,12 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
           .sort((a, b) => (b.extraCanHolding || 0) - (a.extraCanHolding || 0));
         setCustomers(filtered as Customer[]);
       } else {
-        handleServiceError(res, 'getCustomers');
+        const err = handleServiceError(res, 'getCustomers');
+        showError(err.message);
       }
     } catch (e) {
-      handleServiceError(e, 'getCustomers');
+      const err = handleServiceError(e, 'getCustomers');
+      showError(err.message);
     } finally {
       setLoading(false);
     }
@@ -153,7 +156,8 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
       setSavingReturn(true);
       const updateCustomerResult = await updateCustomer(returnCustomer.id, { extraCanHolding: nextValue });
       if (updateCustomerResult !== true) {
-        handleServiceError(updateCustomerResult, 'updateCustomer');
+        const err = handleServiceError(updateCustomerResult, 'updateCustomer');
+        showError(err.message);
         setSavingReturn(false);
         return;
       }
@@ -170,7 +174,8 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
         paymentRef: 0,
       });
       if (purchaseRecordResult !== true) {
-        handleServiceError(purchaseRecordResult, 'addPurchaseHistory');
+        const err = handleServiceError(purchaseRecordResult, 'addPurchaseHistory');
+        showError(err.message);
         setSavingReturn(false);
         return;
       }
@@ -191,7 +196,8 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
         qty,
       );
       if (salesUpdateResult !== true) {
-        handleServiceError(salesUpdateResult, 'updateSalesRecord');
+        const err = handleServiceError(salesUpdateResult, 'updateSalesRecord');
+        showError(err.message);
         setSavingReturn(false);
         return;
       }
@@ -215,14 +221,16 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
         pendingPaymentReceived: 0,
       });
       if (dailyRecordResult !== true) {
-        handleServiceError(dailyRecordResult, 'addDailyRecord');
+        const err = handleServiceError(dailyRecordResult, 'addDailyRecord');
+        showError(err.message);
         setSavingReturn(false);
         return;
       }
 
       const stocks = await getStocks();
       if (!Array.isArray(stocks)) {
-        handleServiceError(stocks, 'getStocks');
+        const err = handleServiceError(stocks, 'getStocks');
+        showError(err.message);
         setSavingReturn(false);
         return;
       }
@@ -235,7 +243,8 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
       const nextEmpty = (selectedStock.empty || 0) + qty;
       const stockUpdateResult = await updateStock(returnProduct, { extraCan: nextExtraCan, empty: nextEmpty });
       if (stockUpdateResult !== true) {
-        handleServiceError(stockUpdateResult, 'updateStock');
+        const err = handleServiceError(stockUpdateResult, 'updateStock');
+        showError(err.message);
         setSavingReturn(false);
         return;
       }
@@ -244,7 +253,8 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
       setReturnCustomer(null);
       setReturnQty('');
     } catch (e) {
-      handleServiceError(e, 'updateCustomer');
+      const err = handleServiceError(e, 'updateCustomer');
+      showError(err.message);
     } finally {
       setSavingReturn(false);
     }

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuth, signOut } from '@react-native-firebase/auth';
 import { getFirestore, collection, query, where, getDocs, limit } from '@react-native-firebase/firestore';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { getOrders } from '../services/orderService';
 import { getCustomers } from '../services/customerService';
 import { getStocks } from '../services/stockService';
@@ -110,7 +111,8 @@ export default function EmployeeDashboard() {
         }
       }
     } catch (e) {
-      handleServiceError(e, 'fetchUserProfile');
+      const err = handleServiceError(e, 'fetchUserProfile');
+      showError(err.message);
     }
   };
 
@@ -141,21 +143,36 @@ export default function EmployeeDashboard() {
       ]);
 
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
-      if (isServiceError(ordersResult)) handleServiceError(ordersResult, 'getOrders');
+      if (isServiceError(ordersResult)) {
+        const err = handleServiceError(ordersResult, 'getOrders');
+        showError(err.message);
+      }
 
       const openOrders = orders.filter((order) => !order.deliveredAt);
 
       const sales = !isServiceError(salesResult) && salesResult ? salesResult : null;
-      if (isServiceError(salesResult)) handleServiceError(salesResult, 'getSalesRecord');
+      if (isServiceError(salesResult)) {
+        const err = handleServiceError(salesResult, 'getSalesRecord');
+        showError(err.message);
+      }
 
       const stocks = Array.isArray(stocksResult) ? stocksResult : [];
-      if (isServiceError(stocksResult)) handleServiceError(stocksResult, 'getStocks');
+      if (isServiceError(stocksResult)) {
+        const err = handleServiceError(stocksResult, 'getStocks');
+        showError(err.message);
+      }
 
       const customers = Array.isArray(customersResult) ? customersResult : [];
-      if (isServiceError(customersResult)) handleServiceError(customersResult, 'getCustomers');
+      if (isServiceError(customersResult)) {
+        const err = handleServiceError(customersResult, 'getCustomers');
+        showError(err.message);
+      }
 
       const expenses = Array.isArray(expensesResult) ? expensesResult : [];
-      if (isServiceError(expensesResult)) handleServiceError(expensesResult, 'getExpenses');
+      if (isServiceError(expensesResult)) {
+        const err = handleServiceError(expensesResult, 'getExpenses');
+        showError(err.message);
+      }
 
       const customerTypeCounts = customers.reduce(
         (acc, cur) => {
@@ -180,7 +197,7 @@ export default function EmployeeDashboard() {
       const onlinePayment = sales?.onlinePayment || 0;
       const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) + (sales?.onlineBillsPayment || 0);
       const expenseValue = expenseTotal || sales?.expense || 0;
-      const inHandCash = cashPayment + (sales?.cashBillsPayment || 0) - expenseValue;
+      const inHandCash = cashPayment + (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) - expenseValue;
 
       const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20') || s.productName?.toLowerCase().includes('20l'));
       const stock20LEmpty = stock20L?.empty || 0;
@@ -212,7 +229,8 @@ export default function EmployeeDashboard() {
 
       setLoading(false);
     } catch (e) {
-      handleServiceError(e, 'loadEmployeeData');
+      const err = handleServiceError(e, 'loadEmployeeData');
+      showError(err.message);
       setLoading(false);
     }
   };
@@ -229,7 +247,8 @@ export default function EmployeeDashboard() {
       try {
         await signOut(getAuth());
       } catch (e) {
-        handleServiceError(e, 'signOut');
+        const err = handleServiceError(e, 'signOut');
+        showError(err.message);
       }
     };
 

@@ -20,6 +20,7 @@ import { getStocks } from '../services/stockService';
 import { getExpenses } from '../services/expenseService';
 import { getSalesRecord } from '../services/salesService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
 import DeliveriesScreen from './DeliveriesScreen';
@@ -104,7 +105,8 @@ export default function OwnerDashboard() {
     try {
       await signOut(getAuth());
     } catch (e) {
-      handleServiceError(e, 'signOut');
+      const err = handleServiceError(e, 'signOut');
+      showError(err.message);
     }
   };
 
@@ -136,24 +138,28 @@ export default function OwnerDashboard() {
 
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
       if (isServiceError(ordersResult)) {
-        handleServiceError(ordersResult, 'getOrders');
+        const err = handleServiceError(ordersResult, 'getOrders');
+        showError(err.message);
       }
 
       const openOrders = orders.filter((order) => !order.deliveredAt);
 
       const sales = !isServiceError(salesResult) && salesResult ? salesResult : null;
       if (isServiceError(salesResult)) {
-        handleServiceError(salesResult, 'getSalesRecord');
+        const err = handleServiceError(salesResult, 'getSalesRecord');
+        showError(err.message);
       }
 
       const stocks = Array.isArray(stocksResult) ? stocksResult : [];
       if (isServiceError(stocksResult)) {
-        handleServiceError(stocksResult, 'getStocks');
+        const err = handleServiceError(stocksResult, 'getStocks');
+        showError(err.message);
       }
 
       const customers = Array.isArray(customersResult) ? customersResult : [];
       if (isServiceError(customersResult)) {
-        handleServiceError(customersResult, 'getCustomers');
+        const err = handleServiceError(customersResult, 'getCustomers');
+        showError(err.message);
       }
 
       const customerTypeCounts = customers.reduce(
@@ -168,7 +174,8 @@ export default function OwnerDashboard() {
 
       const expenses = Array.isArray(expensesResult) ? expensesResult : [];
       if (isServiceError(expensesResult)) {
-        handleServiceError(expensesResult, 'getExpenses');
+        const err = handleServiceError(expensesResult, 'getExpenses');
+        showError(err.message);
       }
 
       const expenseTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -184,7 +191,7 @@ export default function OwnerDashboard() {
       const onlinePayment = sales?.onlinePayment || 0;
       const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) + (sales?.onlineBillsPayment || 0);
       const expenseValue = expenseTotal || sales?.expense || 0;
-      const inHandCash = cashPayment + (sales?.cashBillsPayment || 0) - expenseValue;
+      const inHandCash = cashPayment + (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) - expenseValue;
 
       const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20') || s.productName?.toLowerCase().includes('20l'));
       const stock20LEmpty = stock20L?.empty || 0;
@@ -215,7 +222,8 @@ export default function OwnerDashboard() {
       });
       setLoading(false);
     } catch (e) {
-      handleServiceError(e, 'fetchDashboardStats');
+      const err = handleServiceError(e, 'fetchDashboardStats');
+      showError(err.message);
       setLoading(false);
     }
   };

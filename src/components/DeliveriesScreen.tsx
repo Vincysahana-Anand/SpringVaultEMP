@@ -27,6 +27,7 @@ import { completeDeliveryTransaction } from '../services/deliveryService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
+import { showError, showSuccess } from '../shared/feedback/messageBus';
 import DropletLoader from './DropletLoader';
 
 type DeliveryTab = 'pending' | 'delivered';
@@ -116,10 +117,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         });
         setOrders(sorted);
       } else {
-        handleServiceError(result, 'getOrders');
+        const err = handleServiceError(result, 'getOrders');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'loadOrders');
+      const err = handleServiceError(error, 'loadOrders');
+      showError(err.message);
     } finally {
       setLoading(false);
     }
@@ -171,10 +174,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
           price: found?.price,
         });
       } else {
-        handleServiceError(customersResult, 'getCustomers');
+        const err = handleServiceError(customersResult, 'getCustomers');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'loadCustomerForModal');
+      const err = handleServiceError(error, 'loadCustomerForModal');
+      showError(err.message);
     }
   };
 
@@ -198,14 +203,14 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     // Validate full bottles delivered (mandatory)
     const fullBottles = parseInt(fullBottlesDelivered || '0', 10);
     if (isNaN(fullBottles) || fullBottles <= 0) {
-      Alert.alert('Validation Error', 'Please enter at least 1 full water bottle delivered', [{ text: 'OK' }]);
+      showError('Please enter at least 1 full water bottle delivered', { title: 'Validation' });
       setSubmitting(false);
       return;
     }
 
     // If online payment, ensure reference is provided
     if (paymentMethod === 'online' && !paymentRef.trim()) {
-      Alert.alert('Validation Error', 'Please enter UTR / UPI Transaction ID for online payments', [{ text: 'OK' }]);
+      showError('Please enter UTR / UPI Transaction ID for online payments', { title: 'Validation' });
       setSubmitting(false);
       return;
     }
@@ -219,7 +224,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     if (!customer) {
       const customersResult = await getCustomers();
       if (!Array.isArray(customersResult)) {
-        handleServiceError(customersResult, 'getCustomers');
+        const err = handleServiceError(customersResult, 'getCustomers');
+        showError(err.message);
         setSubmitting(false);
         return;
       }
@@ -229,7 +235,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     
     if (!customer) {
       setSubmitting(false);
-      Alert.alert('Error', 'Customer not found', [{ text: 'OK' }]);
+      showError('Customer not found');
       return;
     }
     
@@ -278,7 +284,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     const currentStock = products.find((p: Stock) => p.id === selectedOrder.productId);
     if (!currentStock) {
       setSubmitting(false);
-      Alert.alert('Error', 'Stock not found for this product', [{ text: 'OK' }]);
+      showError('Stock not found for this product');
       return;
     }
 
@@ -328,7 +334,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       });
 
       if (txResult && typeof txResult === 'object' && 'code' in txResult && 'message' in txResult) {
-        handleServiceError(txResult, 'completeDeliveryTransaction');
+        const err = handleServiceError(txResult, 'completeDeliveryTransaction');
+        showError(err.message);
         setSubmitting(false);
         return;
       }
@@ -336,10 +343,11 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       await loadOrders();
       setSubmitting(false);
       handleCloseDeliveryModal();
-      Alert.alert('Success', 'Delivery completed successfully', [{ text: 'OK' }]);
+      showSuccess('Delivery completed successfully');
     } catch (error) {
       console.error('Error in handleSubmitDelivery:', error);
-      handleServiceError(error, 'completeDeliveryTransaction');
+      const err = handleServiceError(error, 'completeDeliveryTransaction');
+      showError(err.message);
       setSubmitting(false);
     }
   };
@@ -351,10 +359,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       if (Array.isArray(result)) {
         setProducts(result);
       } else {
-        handleServiceError(result, 'getStocks');
+        const err = handleServiceError(result, 'getStocks');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'loadProducts');
+      const err = handleServiceError(error, 'loadProducts');
+      showError(err.message);
     } finally {
       setLoadingProducts(false);
     }
@@ -367,10 +377,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       if (Array.isArray(result)) {
         setCustomers(result);
       } else {
-        handleServiceError(result, 'getCustomers');
+        const err = handleServiceError(result, 'getCustomers');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'loadCustomers');
+      const err = handleServiceError(error, 'loadCustomers');
+      showError(err.message);
     } finally {
       setLoadingCustomers(false);
     }
@@ -390,11 +402,13 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         // Reverse to show latest first
         setCompletedDeliveries([...result].reverse());
       } else {
-        handleServiceError(result, 'getDailyRecordsByDate');
+        const err = handleServiceError(result, 'getDailyRecordsByDate');
+        showError(err.message);
         setCompletedDeliveries([]);
       }
     } catch (error) {
-      handleServiceError(error, 'loadCompletedDeliveries');
+      const err = handleServiceError(error, 'loadCompletedDeliveries');
+      showError(err.message);
       setCompletedDeliveries([]);
     }
   };
@@ -464,12 +478,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
     const quantity = parseInt(editQuantity, 10);
     if (isNaN(quantity) || quantity <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid quantity', [{ text: 'OK' }]);
+      showError('Please enter a valid quantity', { title: 'Validation' });
       return;
     }
 
     if (!editProductId) {
-      Alert.alert('Validation Error', 'Please select a product', [{ text: 'OK' }]);
+      showError('Please select a product', { title: 'Validation' });
       return;
     }
 
@@ -488,9 +502,10 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       setOrders(orders.map(o => o.id === editingOrder.id ? updatedOrder : o));
       
       handleCloseEditModal();
-      Alert.alert('Success', 'Order updated successfully', [{ text: 'OK' }]);
+      showSuccess('Order updated successfully');
     } catch (error) {
-      handleServiceError(error, 'updateOrder');
+      const err = handleServiceError(error, 'updateOrder');
+      showError(err.message);
     } finally {
       setSubmittingEdit(false);
     }
@@ -511,9 +526,10 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
               setDeleting(order.id!);
               await deleteOrder(order.id!);
               setOrders(orders.filter((o) => o.id !== order.id));
-              Alert.alert('Success', 'Order deleted', [{ text: 'OK' }]);
+              showSuccess('Order deleted');
             } catch (error) {
-              handleServiceError(error, 'deleteOrder');
+              const err = handleServiceError(error, 'deleteOrder');
+              showError(err.message);
             } finally {
               setDeleting(null);
             }

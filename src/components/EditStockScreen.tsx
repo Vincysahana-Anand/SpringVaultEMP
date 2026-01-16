@@ -5,13 +5,13 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { updateStock, Stock } from '../services/stockService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError, showSuccess } from '../shared/feedback/messageBus';
 
 interface EditStockScreenProps {
   stock: Stock;
@@ -87,7 +87,7 @@ export default function EditStockScreen({
     const quantity = parseInt(editQuantity || '0', 10);
 
     if (isNaN(quantity) || quantity < 0) {
-      Alert.alert('Validation Error', 'Please enter a valid quantity', [{ text: 'OK' }]);
+      showError('Please enter a valid quantity', { title: 'Validation' });
       return;
     }
 
@@ -129,7 +129,8 @@ export default function EditStockScreen({
 
       const result = await updateStock(stock.id, updateData);
       if (result !== true) {
-        handleServiceError(result, 'updateStock');
+        const err = handleServiceError(result, 'updateStock');
+        showError(err.message);
         setSubmitting(false);
         return;
       }
@@ -144,14 +145,11 @@ export default function EditStockScreen({
       };
 
       setSubmitting(false);
-      Alert.alert('Success', 'Stock updated successfully', [
-        {
-          text: 'OK',
-          onPress: () => onSuccess(updatedStock),
-        },
-      ]);
+      showSuccess('Stock updated successfully');
+      onSuccess(updatedStock);
     } catch (error) {
-      handleServiceError(error, 'updateStock');
+      const err = handleServiceError(error, 'updateStock');
+      showError(err.message);
       setSubmitting(false);
     }
   };

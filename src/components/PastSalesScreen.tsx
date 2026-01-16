@@ -11,6 +11,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { getISTDate } from '../utils/dateUtils';
 import { getSalesRecord, SalesRecord } from '../services/salesService';
 
@@ -47,11 +48,13 @@ export default function PastSalesScreen({ onBack }: Props) {
       } else if (res && !(res as any).code && !(res as any).message) {
         setSales(res as SalesRecord);
       } else {
-        handleServiceError(res as any, 'getSalesRecord');
+        const err = handleServiceError(res as any, 'getSalesRecord');
+        showError(err.message);
         setSales(null);
       }
     } catch (e) {
-      handleServiceError(e, 'getSalesRecord');
+      const err = handleServiceError(e, 'getSalesRecord');
+      showError(err.message);
       setSales(null);
     } finally {
       setLoading(false);

@@ -13,6 +13,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
 import { updateCustomer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 
 interface Customer {
   id: string;
@@ -86,7 +87,8 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
       await updateCustomer(formData.id, formData as any);
       onSave(formData);
     } catch (e) {
-      handleServiceError(e, 'updateCustomer');
+      const err = handleServiceError(e, 'updateCustomer');
+      showError(err.message);
     } finally {
       setLoading(false);
     }

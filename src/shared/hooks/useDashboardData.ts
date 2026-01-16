@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { handleServiceError } from '../../services/serviceErrorWrapper';
+import { showError } from '../feedback/messageBus';
 
 interface DashboardState {
   loading: boolean;
@@ -36,7 +37,8 @@ export function useDashboardData(
       });
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
-      handleServiceError(error, 'useDashboardData');
+      const serviceError = handleServiceError(error, 'useDashboardData');
+      showError(serviceError.message);
       setState({
         loading: false,
         error,

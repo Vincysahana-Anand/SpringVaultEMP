@@ -24,6 +24,7 @@ import { getIconColor } from '../shared/icons/colorMap';
 import { currencyINR } from '../utils/format';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import { colors, spacing, elevation, typography, borderRadius } from '../shared/theme/theme';
+import { showError } from '../shared/feedback/messageBus';
 
 const logo = require('../assets/banner.png');
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -80,7 +81,8 @@ export default function CustomerDashboard() {
         }
       }
     } catch (e) {
-      handleServiceError(e, 'fetchUserProfile');
+      const err = handleServiceError(e, 'fetchUserProfile');
+      showError(err.message);
     }
   };
 
@@ -91,6 +93,10 @@ export default function CustomerDashboard() {
       // Fetch orders for customer
       const ordersResult = await getOrders();
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
+      if (!Array.isArray(ordersResult)) {
+        const err = handleServiceError(ordersResult, 'getOrders');
+        showError(err.message);
+      }
       
       const totalDeliveries = orders.length;
       const pendingOrders = orders.filter(o => !o.deliveredAt).length;
@@ -137,7 +143,8 @@ export default function CustomerDashboard() {
       setTodayBalance(todayBalance);
       setLoading(false);
     } catch (e) {
-      handleServiceError(e, 'loadCustomerData');
+      const err = handleServiceError(e, 'loadCustomerData');
+      showError(err.message);
       setLoading(false);
     }
   };
@@ -153,7 +160,8 @@ export default function CustomerDashboard() {
     try {
       await signOut(getAuth());
     } catch (e) {
-      handleServiceError(e, 'signOut');
+      const err = handleServiceError(e, 'signOut');
+      showError(err.message);
     }
   };
 

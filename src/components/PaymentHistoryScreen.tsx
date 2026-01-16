@@ -15,6 +15,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { DailyRecordEntry, getDailyRecordsByDate } from '../services/dailyRecordService';
 import { getISTDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { getCustomers, Customer } from '../services/customerService';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 
@@ -90,10 +91,12 @@ export default function PaymentHistoryScreen({ onBack }: Props) {
         const sorted = payments.sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
         setEntries(sorted);
       } else {
-        handleServiceError(res, 'getDailyRecordsByDate');
+        const err = handleServiceError(res, 'getDailyRecordsByDate');
+        showError(err.message);
       }
     } catch (e) {
-      handleServiceError(e, 'getDailyRecordsByDate');
+      const err = handleServiceError(e, 'getDailyRecordsByDate');
+      showError(err.message);
     } finally {
       setLoading(false);
     }
@@ -134,7 +137,8 @@ export default function PaymentHistoryScreen({ onBack }: Props) {
         extraCanHolding: 0,
       });
     } catch (e) {
-      handleServiceError(e, 'getCustomers');
+      const err = handleServiceError(e, 'getCustomers');
+      showError(err.message);
     } finally {
       setLoadingCustomer(false);
     }

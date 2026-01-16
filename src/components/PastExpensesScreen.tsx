@@ -4,6 +4,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { getExpenses, Expense } from '../services/expenseService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { getISTDate } from '../utils/dateUtils';
 
 interface Props { onBack?: () => void; }
@@ -41,10 +42,12 @@ export default function PastExpensesScreen({ onBack }: Props) {
         });
         setExpenses(sorted);
       } else {
-        handleServiceError(res, 'getExpenses');
+        const err = handleServiceError(res, 'getExpenses');
+        showError(err.message);
       }
     } catch (e) {
-      handleServiceError(e, 'getExpenses');
+      const err = handleServiceError(e, 'getExpenses');
+      showError(err.message);
     } finally {
       setLoading(false);
     }

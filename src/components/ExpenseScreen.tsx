@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { Expense, getExpenses } from '../services/expenseService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { getISTDate } from '../utils/dateUtils';
 import DropletLoader from './DropletLoader';
 
@@ -29,10 +30,12 @@ export default function ExpenseScreen({ onAddPress }: { onAddPress?: () => void 
         const total = result.reduce((sum, e) => sum + (e.amount || 0), 0);
         setTotalExpense(total);
       } else {
-        handleServiceError(result, 'getExpenses');
+        const err = handleServiceError(result, 'getExpenses');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'getExpenses');
+      const err = handleServiceError(error, 'getExpenses');
+      showError(err.message);
     } finally {
       setLoading(false);
     }

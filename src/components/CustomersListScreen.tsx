@@ -14,7 +14,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers } from '../services/customerService';
@@ -25,6 +24,7 @@ import { handleServiceError } from '../services/serviceErrorWrapper';
 import { currencyINR } from '../utils/format';
 import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
+import { showError, showInfo, showSuccess } from '../shared/feedback/messageBus';
 import DropletLoader from './DropletLoader';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import EditCustomerScreen from './EditCustomerScreen';
@@ -92,7 +92,8 @@ export default function CustomersListScreen() {
       setCustomers(customersData as Customer[]);
       setFilteredCustomers(customersData as Customer[]);
     } catch (e) {
-      handleServiceError(e, 'loadCustomers');
+      const err = handleServiceError(e, 'loadCustomers');
+      showError(err.message);
     } finally {
       setLoading(false);
     }
@@ -108,10 +109,12 @@ export default function CustomersListScreen() {
           setOrderProduct(result[0]);
         }
       } else {
-        handleServiceError(result, 'getStocks');
+        const err = handleServiceError(result, 'getStocks');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'getStocks');
+      const err = handleServiceError(error, 'getStocks');
+      showError(err.message);
     } finally {
       setLoadingProducts(false);
     }
@@ -278,10 +281,9 @@ export default function CustomersListScreen() {
         
         if (existingOrder) {
           setSubmittingOrder(false);
-          Alert.alert(
-            'Order Already Pending',
-            `An order is already pending for ${orderCustomer.name}.\n\nProduct: ${existingOrder.productName}\nQuantity: ${existingOrder.quantity}`,
-            [{ text: 'OK' }]
+          showInfo(
+            `An order is already pending for ${orderCustomer.name}. Product: ${existingOrder.productName} (Qty: ${existingOrder.quantity})`,
+            { title: 'Order Already Pending', durationMs: 3500 }
           );
           return;
         }
@@ -333,7 +335,8 @@ export default function CustomersListScreen() {
               );
               if (salesUpdateResult !== true) {
                 console.error('Sales record update failed:', salesUpdateResult);
-                handleServiceError(salesUpdateResult, 'updateSalesRecord');
+                const err = handleServiceError(salesUpdateResult, 'updateSalesRecord');
+                showError(err.message);
                 setSubmittingOrder(false);
                 return;
               }
@@ -343,26 +346,14 @@ export default function CustomersListScreen() {
         handleCloseOrderModal();
         
         // Show success message
-        Alert.alert(
-          'Success',
-          `Order placed successfully for ${orderCustomer.name}`,
-          [{ text: 'OK' }]
-        );
+        showSuccess(`Order placed successfully for ${orderCustomer.name}`);
       } else {
         // Show error message
-        Alert.alert(
-          'Error',
-          'Failed to place order. Please try again.',
-          [{ text: 'OK' }]
-        );
+        showError('Failed to place order. Please try again.');
       }
     } catch (e) {
       console.error('Error placing order:', e);
-      Alert.alert(
-        'Error',
-        'An unexpected error occurred. Please try again.',
-        [{ text: 'OK' }]
-      );
+      showError('An unexpected error occurred. Please try again.');
       setSubmittingOrder(false);
     } finally {
       if (submittingOrder) {

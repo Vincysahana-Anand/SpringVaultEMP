@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { DailyRecordEntry, getDailyRecordsByDate } from '../services/dailyRecordService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import { getISTDate } from '../utils/dateUtils';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
@@ -50,10 +51,12 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
         const sorted = [...res].sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
         setEntries(sorted);
       } else {
-        handleServiceError(res, 'getDailyRecordsByDate');
+        const err = handleServiceError(res, 'getDailyRecordsByDate');
+        showError(err.message);
       }
     } catch (e) {
-      handleServiceError(e, 'getDailyRecordsByDate');
+      const err = handleServiceError(e, 'getDailyRecordsByDate');
+      showError(err.message);
     } finally {
       setLoading(false);
     }

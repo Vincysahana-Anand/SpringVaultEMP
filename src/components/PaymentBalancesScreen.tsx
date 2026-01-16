@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, RefreshControl, TextInput, Modal, Pressable, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, RefreshControl, TextInput, Modal, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers, Customer, updateCustomer } from '../services/customerService';
 import { addPurchaseHistory } from '../services/purchaseHistoryService';
@@ -7,6 +7,7 @@ import { addDailyRecord, DailyRecordEntry } from '../services/dailyRecordService
 import { updateSalesRecord } from '../services/salesService';
 import { getISTDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import PaymentHistoryScreen from './PaymentHistoryScreen';
 
@@ -56,10 +57,12 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           .sort((a, b) => (b.balance || 0) - (a.balance || 0));
         setCustomers(normalized);
       } else {
-        handleServiceError(res, 'getCustomers');
+        const err = handleServiceError(res, 'getCustomers');
+        showError(err.message);
       }
     } catch (e) {
-      handleServiceError(e, 'getCustomers');
+      const err = handleServiceError(e, 'getCustomers');
+      showError(err.message);
     } finally {
       setLoading(false);
     }
@@ -101,11 +104,11 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     }
     const amountValue = Number(payAmount || 0);
     if (isNaN(amountValue) || amountValue <= 0) {
-      Alert.alert('Validation', 'Enter a valid amount');
+      showError('Enter a valid amount', { title: 'Validation' });
       return;
     }
     if (payMethod === 'online' && !payRef.trim()) {
-      Alert.alert('Validation', 'Enter UTR / UPI transaction ID');
+      showError('Enter UTR / UPI transaction ID', { title: 'Validation' });
       return;
     }
     try {
@@ -116,7 +119,8 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       // 1) Update customer balance
       const res = await updateCustomer(payCustomer.id, { balance: newBalance });
       if (res !== true) {
-        handleServiceError(res, 'updateCustomer');
+        const err = handleServiceError(res, 'updateCustomer');
+        showError(err.message);
         setSubmittingPay(false);
         return;
       }
@@ -185,7 +189,8 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       setShowPayModal(false);
       setPayCustomer(null);
     } catch (e) {
-      handleServiceError(e, 'submitPayment');
+      const err = handleServiceError(e, 'submitPayment');
+      showError(err.message);
     } finally {
       setSubmittingPay(false);
     }

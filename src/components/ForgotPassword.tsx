@@ -9,12 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getAuth, sendPasswordResetEmail } from '@react-native-firebase/auth';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import DropletLoader from './DropletLoader';
+import { showSuccess } from '../shared/feedback/messageBus';
 
 const banner = require('../assets/banner.png');
 
@@ -33,7 +33,7 @@ export default function ForgotPassword({ onBack }: { onBack: () => void }) {
     try {
       await sendPasswordResetEmail(getAuth(), email.trim());
       setLoading(false);
-      Alert.alert('Sent', 'A password reset email has been sent.');
+      showSuccess('A password reset email has been sent.');
       onBack();
     } catch (e: any) {
       setLoading(false);

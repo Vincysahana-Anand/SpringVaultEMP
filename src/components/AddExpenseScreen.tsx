@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, ScrollView } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { addExpense } from '../services/expenseService';
 import { addExpenseToSales } from '../services/salesService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
+import { showError, showSuccess } from '../shared/feedback/messageBus';
 
 const colors = {
   primary: { 50: '#f5f7ff', 200: '#d6e4f7', 500: '#5b9eff', 600: '#4a8ce6' },
@@ -48,30 +49,34 @@ export default function AddExpenseScreen({ onBack }: { onBack: () => void }) {
   const handleSave = async () => {
     const amt = parseFloat(amount);
     if (!selectedType) {
-      Alert.alert('Validation', 'Select an expense type');
+      showError('Select an expense type', { title: 'Validation' });
       return;
     }
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Validation', 'Enter a valid amount');
+      showError('Enter a valid amount', { title: 'Validation' });
       return;
     }
     try {
       setSaving(true);
       const result = await addExpense({ type: selectedType, amount: amt, createdAt: getISTDate() });
       if (result !== true) {
-        handleServiceError(result, 'addExpense');
+        const err = handleServiceError(result, 'addExpense');
+        showError(err.message);
         setSaving(false);
         return;
       }
       const salesRes = await addExpenseToSales(amt);
       if (salesRes !== true) {
-        handleServiceError(salesRes, 'addExpenseToSales');
+        const err = handleServiceError(salesRes, 'addExpenseToSales');
+        showError(err.message);
         setSaving(false);
         return;
       }
-      Alert.alert('Success', 'Expense saved', [ { text: 'OK', onPress: onBack } ]);
+      showSuccess('Expense saved');
+      onBack();
     } catch (e) {
-      handleServiceError(e, 'AddExpense');
+      const err = handleServiceError(e, 'AddExpense');
+      showError(err.message);
     } finally {
       setSaving(false);
     }

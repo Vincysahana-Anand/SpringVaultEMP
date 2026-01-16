@@ -22,6 +22,7 @@ import { getFirestore, collection, query, where, limit, getDocs } from '@react-n
 import { handleServiceError } from './src/services/serviceErrorWrapper';
 import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GlobalMessageProvider } from './src/shared/feedback/GlobalMessageProvider';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -29,7 +30,9 @@ function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
+      <GlobalMessageProvider>
+        <AppContent />
+      </GlobalMessageProvider>
     </SafeAreaProvider>
   );
 }

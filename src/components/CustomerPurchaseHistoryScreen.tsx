@@ -13,6 +13,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
 import { getCustomerPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError } from '../shared/feedback/messageBus';
 
 interface Customer {
   id: string;
@@ -64,10 +65,12 @@ export default function CustomerPurchaseHistoryScreen({
         // Show latest entries (highest index) first
         setPurchases([...result].reverse());
       } else {
-        handleServiceError(result, 'getCustomerPurchaseHistory');
+        const err = handleServiceError(result, 'getCustomerPurchaseHistory');
+        showError(err.message);
       }
     } catch (error) {
-      handleServiceError(error, 'getCustomerPurchaseHistory');
+      const err = handleServiceError(error, 'getCustomerPurchaseHistory');
+      showError(err.message);
     } finally {
       setLoading(false);
     }
