@@ -13,6 +13,7 @@ import PaymentHistoryScreen from './PaymentHistoryScreen';
 import RNPrint from 'react-native-print';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import Share from 'react-native-share';
+import { WebView } from 'react-native-webview';
 
 interface Props { onBack?: () => void; }
 
@@ -51,6 +52,11 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const [shareBannerDataUri, setShareBannerDataUri] = useState<string | null>(null);
   const receiptRef = useRef<ViewShot | null>(null);
 
+  const [shareHtmlJob, setShareHtmlJob] = useState<null | { customer: Customer; html: string }>(null);
+  const [shareHtmlReady, setShareHtmlReady] = useState(false);
+  const [shareHtmlHeight, setShareHtmlHeight] = useState(900);
+  const shareHtmlShotRef = useRef<ViewShot | null>(null);
+
   const bannerImage = useMemo(() => require('../assets/banner.png'), []);
   const shareBannerImage = useMemo(() => require('../assets/banner.png'), []);
   const bannerSource = useMemo(() => {
@@ -76,6 +82,16 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         reader.readAsDataURL(blob);
       });
       return dataUri || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const getShareBannerUriFallback = (): string | null => {
+    try {
+      const resolved = Image.resolveAssetSource(shareBannerImage as any);
+      const uri = resolved?.uri;
+      return uri || null;
     } catch {
       return null;
     }
@@ -326,6 +342,108 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
 </html>`;
   };
 
+  const buildBillHtmlForShareImage = (params: {
+    bannerDataUri?: string | null;
+    customer: Customer;
+    records: PurchaseRecord[];
+    addressText: string;
+  }) => {
+    const { bannerDataUri, customer, records, addressText } = params;
+    const qty = records.reduce((sum, r) => sum + (Number(r.deliveredQty || 0) || 0), 0);
+    const unitPrice = Number((customer as any)?.price || 0) || 0;
+    const computed = qty * unitPrice;
+    const balance = Number((customer as any)?.balance || 0) || 0;
+    const pending = computed < balance ? balance - computed : 0;
+
+    const esc = (s: any) => String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const rows = records
+      .map((r) => {
+        const d = esc(formatReceiptDate(r));
+        const q = esc(String(Number(r.deliveredQty || 0) || 0));
+        return `<tr><td class="td-left">${d}</td><td class="td-right">${q}</td></tr>`;
+      })
+      .join('');
+
+    return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin: 0; padding: 0; background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; color: #0f172a; }
+      .wrap { width: 380px; padding: 12px; box-sizing: border-box; }
+      .center { text-align: center; }
+      .banner { width: 100%; height: auto; display: block; margin: 0 auto 10px auto; }
+      .address { font-size: 12px; line-height: 16px; padding: 0 8px; }
+      .body { padding: 0 8px; }
+      .dash { border-top: 1px dashed #0f172a; margin: 10px 0; }
+      .name { font-weight: 800; font-size: 16px; margin: 0 0 6px 0; }
+      .line { font-size: 12px; line-height: 16px; margin: 0; }
+      table { width: 100%; border-collapse: collapse; }
+      th { font-size: 12px; font-weight: 800; text-align: left; padding: 0 0 6px 0; }
+      .th-right { text-align: right; }
+      td { font-size: 12px; padding: 4px 0; }
+      .td-right { text-align: right; }
+      .tot-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 0; }
+      .tot-label { font-weight: 700; }
+      .pending { color: #ef4444; font-weight: 800; }
+      .total { font-weight: 900; font-size: 14px; }
+      .thanks { text-align: center; font-size: 12px; font-weight: 700; margin-top: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      ${bannerDataUri ? `<img class="banner" src="${esc(bannerDataUri)}" />` : ''}
+      <div class="center address">${esc(addressText).replace(/\n/g, '<br/>')}</div>
+      <div class="body">
+        <div class="dash"></div>
+        <div class="name">${esc(customer.name)}</div>
+        <div class="line">${esc(customer.mobile)}</div>
+        <div class="line">${esc(buildFullAddress(customer) || 'No address')}</div>
+        <div class="line">Price: ₹${esc(String(unitPrice))}</div>
+        <div class="dash"></div>
+        <table>
+          <thead>
+            <tr><th>Date</th><th class="th-right">Qty</th></tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+        <div class="dash"></div>
+        <div class="tot-row"><span class="tot-label">Total Qty</span><span class="tot-label">${esc(String(qty))}</span></div>
+        ${pending > 0 ? `<div class="tot-row"><span class="pending">Pending</span><span class="pending">₹${esc(String(pending))}</span></div>` : ''}
+        <div class="tot-row"><span class="total">Total</span><span class="total">₹${esc(String(balance))}</span></div>
+        <div class="thanks">Thank you!</div>
+      </div>
+    </div>
+    <script>
+      (function(){
+        function postReady(){
+          var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready', height: h }));
+        }
+        function check(){
+          try {
+            var imgs = Array.prototype.slice.call(document.images || []);
+            var all = imgs.every(function(i){ return i.complete; });
+            if (all) { postReady(); return; }
+          } catch (e) {}
+          setTimeout(check, 60);
+        }
+        setTimeout(check, 60);
+      })();
+    </script>
+  </body>
+</html>`;
+  };
+
   const isUserCancelled = (e: unknown) => {
     const msg = String((e as any)?.message ?? (e as any)?.error ?? e ?? '').toLowerCase();
     const code = String((e as any)?.code ?? '').toLowerCase();
@@ -338,7 +456,8 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
 
   const captureAndHandleBill = async () => {
     if (!printJob?.customer?.id) return;
-    if (!receiptRef.current) return;
+    const shotRef = receiptRef.current;
+    if (!shotRef) return;
 
     try {
       setPrintingBill(true);
@@ -348,11 +467,18 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       await new Promise<void>((resolve) => setTimeout(() => resolve(), 900));
 
-      const tmpfile = await captureRef(receiptRef.current, {
-        format: 'jpg',
-        quality: 0.92,
-        result: 'tmpfile',
-      });
+      // Prefer ViewShot's capture() (more reliable than captureRef against the component ref).
+      const tmpfile = await (async () => {
+        const anyRef: any = shotRef as any;
+        if (typeof anyRef?.capture === 'function') {
+          return anyRef.capture({ format: 'jpg', quality: 0.92, result: 'tmpfile' });
+        }
+        return captureRef(shotRef, {
+          format: 'jpg',
+          quality: 0.92,
+          result: 'tmpfile',
+        });
+      })();
 
       const shareImage = async () => {
         try {
@@ -393,27 +519,29 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       if (cancelled) return;
       if (dataUri) {
         setShareBannerDataUri(dataUri);
-        setReceiptBannerLoaded(true);
+        return;
+      }
+
+      // Fallback: use the resolved URI (http/file) if base64 conversion fails.
+      const fallbackUri = getShareBannerUriFallback();
+      if (cancelled) return;
+      if (fallbackUri) {
+        setShareBannerDataUri(fallbackUri);
       }
     })();
-
-    const t = setTimeout(() => {
-      // Fallback: some Android builds don't reliably fire Image load events for bundled assets.
-      setReceiptBannerLoaded(true);
-    }, 900);
     return () => {
       cancelled = true;
-      clearTimeout(t);
     };
   }, [printJob?.customer?.id, printJob?.records?.length]);
 
   useEffect(() => {
     if (!printJob) return;
-    if (!receiptBannerLoaded) return;
+    // Only capture after we have a banner URI (data-uri preferred), otherwise banner can be blank.
+    if (!shareBannerDataUri) return;
     if (!receiptLaidOut) return;
     captureAndHandleBill();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printJob?.customer?.id, receiptBannerLoaded, receiptLaidOut]);
+  }, [printJob?.customer?.id, shareBannerDataUri, receiptLaidOut]);
 
   const openBillOptions = async (customer: Customer) => {
     try {
@@ -494,7 +622,30 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     setShowBillOptionsModal(false);
 
     if (action === 'image') {
-      setPrintJob({ customer, records: res.records });
+      try {
+        setPrintingBill(true);
+        const bannerDataUri = await getBannerDataUri();
+        const addressText =
+          'No.1 E/2, 19th Central Cross Street,\n' +
+          '2nd Main Road, M.K.B Nagar, Chennai - 600039\n' +
+          'Phone: 73056 99866';
+
+        const html = buildBillHtmlForShareImage({
+          bannerDataUri,
+          customer,
+          records: res.records,
+          addressText,
+        });
+
+        setShareHtmlReady(false);
+        setShareHtmlHeight(900);
+        setShareHtmlJob({ customer, html });
+      } catch (e) {
+        if (!isUserCancelled(e)) {
+          // fallback to the old native receipt capture
+          setPrintJob({ customer, records: res.records });
+        }
+      }
       return;
     }
 
@@ -522,6 +673,54 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       setPrintingBill(false);
     }
   };
+
+  const captureAndShareHtmlBill = async () => {
+    if (!shareHtmlJob?.customer?.id) return;
+    const shotRef = shareHtmlShotRef.current;
+    if (!shotRef) return;
+
+    try {
+      setPrintingBill(true);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 600));
+
+      const tmpfile = await (async () => {
+        const anyRef: any = shotRef as any;
+        if (typeof anyRef?.capture === 'function') {
+          return anyRef.capture({ format: 'jpg', quality: 0.92, result: 'tmpfile' });
+        }
+        return captureRef(shotRef, { format: 'jpg', quality: 0.92, result: 'tmpfile' });
+      })();
+
+      try {
+        await Share.open({
+          url: tmpfile,
+          type: 'image/jpeg',
+          filename: `Bill-${shareHtmlJob.customer.name || 'customer'}`,
+        });
+      } catch (shareErr) {
+        if (isUserCancelled(shareErr)) return;
+        throw shareErr;
+      }
+    } catch (e) {
+      if (!isUserCancelled(e)) {
+        const err = handleServiceError(e, 'shareBill');
+        showError(err.message);
+      }
+    } finally {
+      setPrintingBill(false);
+      setShareHtmlJob(null);
+      setShareHtmlReady(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!shareHtmlJob) return;
+    if (!shareHtmlReady) return;
+    captureAndShareHtmlBill();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareHtmlJob?.customer?.id, shareHtmlReady]);
 
   const billingFilteredCustomers = useMemo(() => {
     if (billingFilter === 'all') return customers;
@@ -1053,6 +1252,49 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
                     <Text style={styles.receiptThankYou}>Thank you!</Text>
                   </View>
                 </View>
+              </View>
+            </ViewShot>
+          </View>
+        </View>
+      </Modal>
+
+      {/* HTML receipt renderer for share-image (captured from WebView) */}
+      <Modal visible={!!shareHtmlJob} transparent animationType="fade">
+        <View style={styles.printOverlay}>
+          <View style={styles.printCard}>
+            <View style={styles.printHeader}>
+              <Text style={styles.printTitle}>Preparing bill…</Text>
+              {printingBill ? <ActivityIndicator size="small" color="#0ea5e9" /> : null}
+            </View>
+
+            <ViewShot
+              ref={(r) => {
+                shareHtmlShotRef.current = r;
+              }}
+              options={{ format: 'jpg', quality: 0.92 }}
+            >
+              <View style={{ backgroundColor: '#fff', width: 380, height: shareHtmlHeight }}>
+                <WebView
+                  originWhitelist={['*']}
+                  source={{ html: shareHtmlJob?.html || '' }}
+                  androidLayerType="software"
+                  javaScriptEnabled
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                  onMessage={(e) => {
+                    try {
+                      const data = JSON.parse(String(e.nativeEvent.data || '{}'));
+                      if (data?.type === 'ready') {
+                        const h = Number(data.height || 0);
+                        if (h > 0) setShareHtmlHeight(Math.min(2200, Math.max(700, h)));
+                        setShareHtmlReady(true);
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  style={{ width: 380, height: shareHtmlHeight, backgroundColor: '#fff' }}
+                />
               </View>
             </ViewShot>
           </View>
