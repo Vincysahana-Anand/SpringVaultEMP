@@ -46,7 +46,11 @@ interface Customer {
   customerType?: string;
 }
 
-export default function CustomersListScreen() {
+interface CustomersListScreenProps {
+  allowCustomerDelete?: boolean;
+}
+
+export default function CustomersListScreen({ allowCustomerDelete = false }: CustomersListScreenProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -425,6 +429,11 @@ export default function CustomersListScreen() {
               onBack={() => setSelectedCustomer(null)}
               onEdit={() => setSelectedCustomer({ ...selectedCustomer, id: `edit-${selectedCustomer.id}` })}
               onViewHistory={() => setHistoryCustomer(selectedCustomer)}
+              allowDelete={allowCustomerDelete}
+              onDeleted={(customerId) => {
+                setCustomers((prev) => prev.filter((c) => c.id !== customerId));
+                setFilteredCustomers((prev) => prev.filter((c) => c.id !== customerId));
+              }}
             />
           )}
         </View>

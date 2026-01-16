@@ -8,9 +8,13 @@ import {
   Linking,
   BackHandler,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
+import { deleteCustomer } from '../services/customerService';
+import { handleServiceError } from '../services/serviceErrorWrapper';
+import { showError, showSuccess } from '../shared/feedback/messageBus';
 
 interface Customer {
   id: string;
@@ -35,6 +39,8 @@ interface CustomerDetailsScreenProps {
   onBack: () => void;
   onEdit: () => void;
   onViewHistory: () => void;
+  allowDelete?: boolean;
+  onDeleted?: (customerId: string) => void;
 }
 
 export default function CustomerDetailsScreen({
@@ -42,8 +48,11 @@ export default function CustomerDetailsScreen({
   onBack,
   onEdit,
   onViewHistory,
+  allowDelete = false,
+  onDeleted,
 }: CustomerDetailsScreenProps) {
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   React.useEffect(() => {
     const handleBackPress = () => {
@@ -69,6 +78,41 @@ export default function CustomerDetailsScreen({
   const onRefresh = () => {
     setLoading(true);
     setTimeout(() => setLoading(false), 500);
+  };
+
+  const confirmDelete = () => {
+    if (!customer.id || deleting) return;
+
+    Alert.alert(
+      'Delete customer?',
+      'This will permanently delete the customer record. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeleting(true);
+              const result = await deleteCustomer(customer.id);
+              if (result !== true) {
+                const err = handleServiceError(result, 'deleteCustomer');
+                showError(err.message);
+                return;
+              }
+              showSuccess('Customer deleted');
+              onDeleted?.(customer.id);
+              onBack();
+            } catch (e) {
+              const err = handleServiceError(e, 'deleteCustomer');
+              showError(err.message);
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -256,6 +300,28 @@ export default function CustomerDetailsScreen({
             color={colors.gray[500]}
           />
         </TouchableOpacity>
+
+        {allowDelete ? (
+          <TouchableOpacity
+            style={[styles.deleteCard, deleting ? styles.disabledCard : null]}
+            onPress={confirmDelete}
+            disabled={deleting}
+          >
+            <View style={styles.historyLeft}>
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={22}
+                color={colors.danger[600]}
+                style={styles.historyIcon}
+              />
+              <View>
+                <Text style={styles.deleteTitle}>{deleting ? 'Deleting...' : 'Delete Customer'}</Text>
+                <Text style={styles.deleteSubtitle}>Owner only • Permanent action</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.danger[300]} />
+          </TouchableOpacity>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -453,6 +519,32 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray[600],
     marginTop: spacing[2],
+  },
+  deleteCard: {
+    marginTop: spacing[12],
+    backgroundColor: colors.bg.white,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[16],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.danger[200],
+    ...elevation.sm,
+  },
+  deleteTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.danger[600],
+  },
+  deleteSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.danger[500],
+    marginTop: spacing[2],
+  },
+  disabledCard: {
+    opacity: 0.6,
   },
   divider: {
     height: 1,

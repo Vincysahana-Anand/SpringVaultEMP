@@ -355,7 +355,7 @@ export default function OwnerDashboard() {
         }))}
       >
         {currentScreen === 'customers' ? (
-          <CustomersListScreen />
+          <CustomersListScreen allowCustomerDelete={true} />
         ) : currentScreen === 'deliveries' ? (
           <DeliveriesScreen userRole="owner" isAdmin={true} />
         ) : currentScreen === 'stock' ? (

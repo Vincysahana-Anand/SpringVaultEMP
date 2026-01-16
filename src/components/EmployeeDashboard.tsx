@@ -371,7 +371,7 @@ export default function EmployeeDashboard() {
           }))}
         >
           {currentScreen === 'customers' ? (
-            <CustomersListScreen />
+            <CustomersListScreen allowCustomerDelete={false} />
           ) : currentScreen === 'deliveries' ? (
             <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'stock' ? (
