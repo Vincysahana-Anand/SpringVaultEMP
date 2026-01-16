@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -74,9 +75,26 @@ export default function EmployeeDashboard() {
   });
 
   useEffect(() => {
-    loadEmployeeData();
     fetchUserProfile();
   }, []);
+
+  // Refresh stats whenever the dashboard comes back into view.
+  useEffect(() => {
+    if (currentScreen === 'dashboard') {
+      loadEmployeeData();
+    }
+  }, [currentScreen]);
+
+  // Also refresh when the app returns to foreground while on dashboard.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && currentScreen === 'dashboard') {
+        loadEmployeeData();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [currentScreen]);
 
   useEffect(() => {
     const handleBackPress = () => {
@@ -84,9 +102,20 @@ export default function EmployeeDashboard() {
         setDrawerOpen(false);
         return true;
       }
-      if (currentScreen === 'customers' || currentScreen === 'deliveries' || currentScreen === 'stock') {
+      if (
+        currentScreen === 'customers' ||
+        currentScreen === 'deliveries' ||
+        currentScreen === 'stock' ||
+        currentScreen === 'addCustomer' ||
+        currentScreen === 'pastDeliveries' ||
+        currentScreen === 'paymentBalances' ||
+        currentScreen === 'extraCan' ||
+        currentScreen === 'pastSales' ||
+        currentScreen === 'pastExpenses'
+      ) {
         setCurrentScreen('dashboard');
         setActiveTab('Home');
+        loadEmployeeData();
         return true;
       }
       return false;
@@ -352,17 +381,53 @@ export default function EmployeeDashboard() {
           ) : currentScreen === 'addExpense' ? (
             <AddExpenseScreen onBack={() => setCurrentScreen('expense')} />
           ) : currentScreen === 'addCustomer' ? (
-            <AddCustomerScreen onBack={() => setCurrentScreen('dashboard')} />
+            <AddCustomerScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'pastDeliveries' ? (
-            <PastDeliveriesScreen onBack={() => setCurrentScreen('dashboard')} />
+            <PastDeliveriesScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'paymentBalances' ? (
-            <PaymentBalancesScreen onBack={() => setCurrentScreen('dashboard')} />
+            <PaymentBalancesScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'extraCan' ? (
-            <ExtraCanHoldingsScreen onBack={() => setCurrentScreen('dashboard')} />
+            <ExtraCanHoldingsScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'pastSales' ? (
-            <PastSalesScreen onBack={() => setCurrentScreen('dashboard')} />
+            <PastSalesScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'pastExpenses' ? (
-            <PastExpensesScreen onBack={() => setCurrentScreen('dashboard')} />
+            <PastExpensesScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'counterSale' ? (
             <PlaceholderCard
               title="Counter Sale"

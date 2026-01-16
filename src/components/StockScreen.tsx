@@ -122,10 +122,9 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
       >
         <View style={styles.cardHeader}>
           <View style={styles.productInfo}>
-            <MaterialCommunityIcons name="water" size={24} color={colors.primary[500]} />
+            <MaterialCommunityIcons name="water" size={20} color={colors.primary[500]} />
             <View style={styles.productDetails}>
               <Text style={styles.productName}>{item.productName}</Text>
-              <Text style={styles.productId}>ID: {item.id}</Text>
             </View>
           </View>
           {userRole === 'owner' && (
@@ -133,7 +132,7 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
               style={styles.editButton}
               onPress={() => handleEditStock(item)}
             >
-              <MaterialCommunityIcons name="pencil" size={18} color={colors.primary[600]} />
+              <MaterialCommunityIcons name="pencil" size={16} color={colors.primary[600]} />
             </TouchableOpacity>
           )}
         </View>
@@ -145,14 +144,12 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Available Qty</Text>
             <Text style={styles.statValue}>{item.quantity || 0}</Text>
-            <Text style={styles.statUnit}>Units</Text>
           </View>
 
           {/* Price */}
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Price</Text>
             <Text style={[styles.statValue, { color: colors.success[600] }]}>₹{(item as any).price || 0}</Text>
-            <Text style={styles.statUnit}>Per Unit</Text>
           </View>
 
           {/* Empty - Only for 20L and Party Can */}
@@ -160,7 +157,6 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Empty</Text>
               <Text style={[styles.statValue, { color: colors.warning[600] }]}>{item.empty || 0}</Text>
-              <Text style={styles.statUnit}>Units</Text>
             </View>
           )}
 
@@ -169,7 +165,6 @@ export default function StockScreen({ userRole = 'employee' }: StockScreenProps)
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Extra Can</Text>
               <Text style={[styles.statValue, { color: colors.success[600] }]}>{item.extraCan || 0}</Text>
-              <Text style={styles.statUnit}>Units</Text>
             </View>
           )}
         </View>
@@ -269,13 +264,13 @@ const styles = StyleSheet.create({
   stockCard: {
     backgroundColor: colors.bg.white,
     borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
+    padding: spacing[2],
+    marginBottom: spacing[2],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -292,14 +287,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productName: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.bg.dark,
-  },
-  productId: {
-    fontSize: typography.fontSize.xs,
-    color: colors.gray[600],
-    marginTop: spacing[2],
   },
   editButton: {
     padding: spacing[2],
@@ -309,7 +299,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: spacing[4],
+    marginVertical: spacing[2],
   },
   statsContainer: {
     flexDirection: 'row',
@@ -320,6 +310,12 @@ const styles = StyleSheet.create({
     width: '48%',
     alignItems: 'center',
     paddingVertical: spacing[2],
+    paddingHorizontal: spacing[2],
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.bg.white,
+    marginBottom: spacing[2],
   },
   statLabel: {
     fontSize: typography.fontSize.xs,
@@ -327,7 +323,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
   },
   statValue: {
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
     color: colors.success[500],
   },

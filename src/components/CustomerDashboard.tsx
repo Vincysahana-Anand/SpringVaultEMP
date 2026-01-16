@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -50,9 +51,26 @@ export default function CustomerDashboard() {
   const [customerId, setCustomerId] = useState('');
 
   useEffect(() => {
-    loadCustomerData();
     fetchUserProfile();
   }, []);
+
+  // Refresh data whenever the dashboard (Home tab) comes into view.
+  useEffect(() => {
+    if (activeTab === 'Home') {
+      loadCustomerData();
+    }
+  }, [activeTab]);
+
+  // Also refresh when the app returns to foreground while on Home.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && activeTab === 'Home') {
+        loadCustomerData();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [activeTab]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
