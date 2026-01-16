@@ -17,6 +17,8 @@ import { getOrders } from '../services/orderService';
 import { getCustomers } from '../services/customerService';
 import { getStocks } from '../services/stockService';
 import { getISTDate } from '../utils/dateUtils';
+import { getSalesRecord } from '../services/salesService';
+import { getExpenses } from '../services/expenseService';
 import { StatCard } from '../shared/components/StatCard';
 import { MenuItem } from '../shared/components/MenuItem';
 import { EdgeIndicator } from '../shared/components/EdgeIndicator';
@@ -38,14 +40,25 @@ const logo = require('../assets/banner.png');
 
 export default function EmployeeDashboard() {
   const [stats, setStats] = useState({
-    totalDeliveries: 0,
-    pendingDeliveries: 0,
+    ordersToday: 0,
     deliveredToday: 0,
-    todayEarnings: 0,
-    totalEarnings: 0,
-    stock20L: 0,
+    pendingDeliveries: 0,
+    deliveredCans: 0,
+    emptyCollected: 0,
+    sale: 0,
+    cashPayment: 0,
+    onlinePayment: 0,
+    pendingPaymentsReceived: 0,
+    expense: 0,
+    inHandCash: 0,
     stockTotal: 0,
+    stock20L: 0,
+    stock20LEmpty: 0,
+    stock20LExtra: 0,
     customers: 0,
+    customersResidence: 0,
+    customersShop: 0,
+    customersParty: 0,
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Home');
@@ -101,6 +114,17 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const formatDateKey = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const isServiceError = (res: any): res is { code: string; message: string } => {
+    return !!(res && typeof res === 'object' && 'code' in res && 'message' in res);
+  };
+
   const loadEmployeeData = async () => {
     try {
       setLoading(true);
@@ -108,44 +132,82 @@ export default function EmployeeDashboard() {
       today.setHours(0, 0, 0, 0);
       setSnapshotDate(today);
 
-      // Fetch orders assigned to employee
-      const ordersResult = await getOrders();
+      const [ordersResult, salesResult, stocksResult, customersResult, expensesResult] = await Promise.all([
+        getOrders(),
+        getSalesRecord(formatDateKey(today)),
+        getStocks(),
+        getCustomers(),
+        getExpenses({ type: 'today' }),
+      ]);
+
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
-      const totalDeliveries = orders.length;
-      const pendingDeliveries = orders.filter(o => !o.deliveredAt).length;
+      if (isServiceError(ordersResult)) handleServiceError(ordersResult, 'getOrders');
 
-      const deliveredTodayOrders = orders.filter((o) => {
-        if (!o.deliveredAt) return false;
-        const deliveredDate = parseDeliveredDate(o.deliveredAt);
-        if (!deliveredDate) return false;
-        return isSameDay(deliveredDate, today);
-      });
-      const deliveredToday = deliveredTodayOrders.length;
+      const openOrders = orders.filter((order) => !order.deliveredAt);
 
-      // Earnings based on delivered orders (10% of amountPaid)
-      const totalEarnings = orders.reduce((sum, o) => sum + (o.amountPaid || 0) * 0.1, 0);
-      const todayEarnings = deliveredTodayOrders.reduce((sum, o) => sum + (o.amountPaid || 0) * 0.1, 0);
+      const sales = !isServiceError(salesResult) && salesResult ? salesResult : null;
+      if (isServiceError(salesResult)) handleServiceError(salesResult, 'getSalesRecord');
 
-      // Fetch stocks
-      const stocksResult = await getStocks();
       const stocks = Array.isArray(stocksResult) ? stocksResult : [];
-      const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20l'));
-      const totalStock = (stock20L?.total as number | undefined) ?? (stock20L?.quantity || 0);
-      const stock20LQty = stock20L?.quantity || 0;
+      if (isServiceError(stocksResult)) handleServiceError(stocksResult, 'getStocks');
 
-      // Customers count
-      const customersResult = await getCustomers();
       const customers = Array.isArray(customersResult) ? customersResult : [];
+      if (isServiceError(customersResult)) handleServiceError(customersResult, 'getCustomers');
+
+      const expenses = Array.isArray(expensesResult) ? expensesResult : [];
+      if (isServiceError(expensesResult)) handleServiceError(expensesResult, 'getExpenses');
+
+      const customerTypeCounts = customers.reduce(
+        (acc, cur) => {
+          if (cur.customerType === 'Residence') acc.residence += 1;
+          else if (cur.customerType === 'Shop') acc.shop += 1;
+          else if (cur.customerType === 'Party') acc.party += 1;
+          return acc;
+        },
+        { residence: 0, shop: 0, party: 0 }
+      );
+
+      const expenseTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      const ordersToday = sales?.orders || 0;
+      const deliveredToday = sales?.delivered || 0;
+      const deliveredCans = sales?.deliveredCans || 0;
+      const emptyCollected = sales?.emptyCollected || 0;
+      const pendingDeliveries = openOrders.length;
+
+      const saleTotal = sales?.totalSale || 0;
+      const cashPayment = sales?.cashPayment || 0;
+      const onlinePayment = sales?.onlinePayment || 0;
+      const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) + (sales?.onlineBillsPayment || 0);
+      const expenseValue = expenseTotal || sales?.expense || 0;
+      const inHandCash = cashPayment + (sales?.cashBillsPayment || 0) - expenseValue;
+
+      const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20') || s.productName?.toLowerCase().includes('20l'));
+      const stock20LEmpty = stock20L?.empty || 0;
+      const stock20LExtra = stock20L?.extraCan || 0;
+      const stock20LQty = stock20L?.quantity || 0;
+      const totalStock = (stock20L?.total as number | undefined) ?? stock20LQty;
 
       setStats({
-        totalDeliveries,
-        pendingDeliveries,
+        ordersToday,
         deliveredToday,
-        todayEarnings,
-        totalEarnings,
-        stock20L: stock20LQty,
+        pendingDeliveries,
+        deliveredCans,
+        emptyCollected,
+        sale: saleTotal,
+        cashPayment,
+        onlinePayment,
+        pendingPaymentsReceived,
+        expense: expenseValue,
+        inHandCash,
         stockTotal: totalStock,
+        stock20L: stock20LQty,
+        stock20LEmpty,
+        stock20LExtra,
         customers: customers.length,
+        customersResidence: customerTypeCounts.residence,
+        customersShop: customerTypeCounts.shop,
+        customersParty: customerTypeCounts.party,
       });
 
       setLoading(false);
@@ -155,214 +217,214 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const openDrawer = () => setDrawerOpen(true);
-  const closeDrawer = () => setDrawerOpen(false);
+    const openDrawer = () => setDrawerOpen(true);
+    const closeDrawer = () => setDrawerOpen(false);
 
-  const handleNavigate = (screen: string) => {
-    setCurrentScreen(screen);
-    closeDrawer();
-  };
+    const handleNavigate = (screen: string) => {
+      setCurrentScreen(screen);
+      closeDrawer();
+    };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut(getAuth());
-    } catch (e) {
-      handleServiceError(e, 'signOut');
-    }
-  };
+    const handleSignOut = async () => {
+      try {
+        await signOut(getAuth());
+      } catch (e) {
+        handleServiceError(e, 'signOut');
+      }
+    };
 
-  const drawerMenuContent = (
-    <>
-      <Text style={styles.drawerTitle}>Quick Access</Text>
-      <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
-      <MenuItem icon="history" label="Past Deliveries" onPress={() => handleNavigate('pastDeliveries')} />
-      <MenuItem icon="wallet-outline" label="Payment Balances" onPress={() => handleNavigate('paymentBalances')} />
-      <MenuItem icon="bottle-soda" label="Extra Can Holdings" onPress={() => handleNavigate('extraCan')} />
-      <MenuItem icon="chart-line" label="Past Sales" onPress={() => handleNavigate('pastSales')} />
-      <MenuItem icon="cash-multiple" label="Past Expenses" onPress={() => handleNavigate('pastExpenses')} />
-    </>
-  );
+    const drawerMenuContent = (
+      <>
+        <Text style={styles.drawerTitle}>Quick Access</Text>
+        <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
+        <MenuItem icon="history" label="Past Deliveries" onPress={() => handleNavigate('pastDeliveries')} />
+        <MenuItem icon="wallet-outline" label="Payment Balances" onPress={() => handleNavigate('paymentBalances')} />
+        <MenuItem icon="bottle-soda" label="Extra Can Holdings" onPress={() => handleNavigate('extraCan')} />
+        <MenuItem icon="chart-line" label="Past Sales" onPress={() => handleNavigate('pastSales')} />
+        <MenuItem icon="cash-multiple" label="Past Expenses" onPress={() => handleNavigate('pastExpenses')} />
+      </>
+    );
 
-  const drawerFooter = (
-    <View style={{ gap: 12 }}>
-      <TouchableOpacity
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
-        onPress={() => handleNavigate('counterSale')}
-      >
-        <MaterialCommunityIcons name="cart-outline" size={20} color="#0ea5e9" />
-        <Text style={{ color: '#0ea5e9', fontWeight: '700' }}>Counter Sale</Text>
-      </TouchableOpacity>
+    const drawerFooter = (
+      <View style={{ gap: 12 }}>
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+          onPress={() => handleNavigate('counterSale')}
+        >
+          <MaterialCommunityIcons name="cart-outline" size={20} color="#0ea5e9" />
+          <Text style={{ color: '#0ea5e9', fontWeight: '700' }}>Counter Sale</Text>
+        </TouchableOpacity>
 
-      <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
+        <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
 
-      <TouchableOpacity
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
-        onPress={handleSignOut}
-      >
-        <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
-        <Text style={{ color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const PlaceholderCard = ({ title, subtitle, icon }: { title: string; subtitle: string; icon: any }) => (
-    <View style={{ padding: 16 }}>
-      <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <MaterialCommunityIcons name={icon} size={22} color="#0ea5e9" />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>{title}</Text>
-        </View>
-        <Text style={{ marginTop: 10, color: '#475569', lineHeight: 20 }}>{subtitle}</Text>
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+          onPress={handleSignOut}
+        >
+          <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
+          <Text style={{ color: '#ef4444', fontWeight: '700' }}>Sign Out</Text>
+        </TouchableOpacity>
       </View>
-    </View>
-  );
+    );
 
-  const tabButtonsConfig = [
-    { icon: 'home', label: 'Home' },
-    { icon: 'account-group', label: 'Customers' },
-    { icon: 'truck', label: 'Deliveries' },
-    { icon: 'cash', label: 'Expense' },
-    { icon: 'water', label: 'Stock' },
-  ];
-
-  const handleTabChange = (tabLabel: string) => {
-    setActiveTab(tabLabel);
-    if (tabLabel === 'Customers') {
-      setCurrentScreen('customers');
-    } else if (tabLabel === 'Deliveries') {
-      setCurrentScreen('deliveries');
-    } else if (tabLabel === 'Stock') {
-      setCurrentScreen('stock');
-    } else if (tabLabel === 'Expense') {
-      setCurrentScreen('expense');
-    } else {
-      setCurrentScreen('dashboard');
-    }
-  };
-
-  const snapshotLabel = useMemo(() => {
-    return snapshotDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  }, [snapshotDate]);
-
-  const parseDeliveredDate = (deliveredAt?: string): Date | null => {
-    if (!deliveredAt) return null;
-    const datePart = deliveredAt.split(',')[0]?.trim();
-    if (!datePart) return null;
-    const [dd, mm, yy] = datePart.split('/');
-    const yearNum = parseInt(yy, 10);
-    const year = yearNum < 50 ? 2000 + yearNum : 1900 + yearNum;
-    const month = parseInt(mm, 10) - 1;
-    const day = parseInt(dd, 10);
-    const parsed = new Date(year, month, day);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  };
-
-  const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <EdgeIndicator />
-      <DrawerLayout
-        drawerOpen={drawerOpen}
-        onDrawerOpen={openDrawer}
-        onDrawerClose={closeDrawer}
-        drawerContent={drawerMenuContent}
-        drawerFooter={drawerFooter}
-        drawerLogo={logo}
-        onTabChange={handleTabChange}
-        tabButtons={tabButtonsConfig.map((tab) => ({
-          ...tab,
-          isActive: activeTab === tab.label,
-        }))}
-      >
-        {currentScreen === 'customers' ? (
-          <CustomersListScreen />
-        ) : currentScreen === 'deliveries' ? (
-          <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
-        ) : currentScreen === 'stock' ? (
-          <StockScreen userRole="employee" />
-        ) : currentScreen === 'expense' ? (
-          <ExpenseScreen onAddPress={() => setCurrentScreen('addExpense')} />
-        ) : currentScreen === 'addExpense' ? (
-          <AddExpenseScreen onBack={() => setCurrentScreen('expense')} />
-        ) : currentScreen === 'addCustomer' ? (
-          <AddCustomerScreen onBack={() => setCurrentScreen('dashboard')} />
-        ) : currentScreen === 'pastDeliveries' ? (
-          <PastDeliveriesScreen onBack={() => setCurrentScreen('dashboard')} />
-        ) : currentScreen === 'paymentBalances' ? (
-          <PaymentBalancesScreen onBack={() => setCurrentScreen('dashboard')} />
-        ) : currentScreen === 'extraCan' ? (
-          <ExtraCanHoldingsScreen onBack={() => setCurrentScreen('dashboard')} />
-        ) : currentScreen === 'pastSales' ? (
-          <PastSalesScreen onBack={() => setCurrentScreen('dashboard')} />
-        ) : currentScreen === 'pastExpenses' ? (
-          <PastExpensesScreen onBack={() => setCurrentScreen('dashboard')} />
-        ) : currentScreen === 'counterSale' ? (
-          <PlaceholderCard
-            title="Counter Sale"
-            subtitle="Quick counter billing will appear here."
-            icon="cart-outline"
-          />
-        ) : (
-          <ScrollView
-            style={styles.content}
-            scrollEventThrottle={16}
-            refreshControl={
-              <RefreshControl refreshing={loading} onRefresh={loadEmployeeData} />
-            }
-          >
-          <View style={styles.topRow}>
-            <Text style={styles.welcome}>Welcome, {userName || 'Employee'}</Text>
-            <View style={styles.datePill}>
-              <MaterialCommunityIcons name="calendar" size={16} color="#475569" />
-              <Text style={styles.snapshotDate}>{snapshotLabel}</Text>
-            </View>
+    const PlaceholderCard = ({ title, subtitle, icon }: { title: string; subtitle: string; icon: any }) => (
+      <View style={{ padding: 16 }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <MaterialCommunityIcons name={icon} size={22} color="#0ea5e9" />
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>{title}</Text>
           </View>
+          <Text style={{ marginTop: 10, color: '#475569', lineHeight: 20 }}>{subtitle}</Text>
+        </View>
+      </View>
+    );
 
-          <Text style={styles.sectionLabel}>Deliveries</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard icon="clock-outline" label="Pending deliveries" value={stats.pendingDeliveries} />
-              <StatCard icon="truck-check" label="Delivered today" value={stats.deliveredToday} />
-            </View>
-            <View style={styles.statsRow}>
-              <StatCard icon="truck" label="Total deliveries" value={stats.totalDeliveries} />
-              <View style={{ flex: 1 }} />
-            </View>
-          </View>
+    const tabButtonsConfig = [
+      { icon: 'home', label: 'Home' },
+      { icon: 'account-group', label: 'Customers' },
+      { icon: 'truck', label: 'Deliveries' },
+      { icon: 'cash', label: 'Expense' },
+      { icon: 'water', label: 'Stock' },
+    ];
 
-          <Text style={styles.sectionLabel}>Earnings</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard icon="wallet" label="Today" value={currencyINR(stats.todayEarnings)} />
-              <StatCard icon="cash" label="Total" value={currencyINR(stats.totalEarnings)} bgColor="#f0fdf4" />
-            </View>
-          </View>
+    const handleTabChange = (tabLabel: string) => {
+      setActiveTab(tabLabel);
+      if (tabLabel === 'Customers') {
+        setCurrentScreen('customers');
+      } else if (tabLabel === 'Deliveries') {
+        setCurrentScreen('deliveries');
+      } else if (tabLabel === 'Stock') {
+        setCurrentScreen('stock');
+      } else if (tabLabel === 'Expense') {
+        setCurrentScreen('expense');
+      } else {
+        setCurrentScreen('dashboard');
+      }
+    };
 
-          <Text style={styles.sectionLabel}>Inventory</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard icon="water" label="20L full" value={stats.stock20L} />
-              <StatCard icon="warehouse" label="Total stock" value={stats.stockTotal} />
-            </View>
-          </View>
+    const snapshotLabel = useMemo(() => {
+      return snapshotDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }, [snapshotDate]);
 
-          <Text style={styles.sectionLabel}>Customers</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard icon="account-multiple" label="Total customers" value={stats.customers} />
-              <View style={{ flex: 1 }} />
-            </View>
-          </View>
+    return (
+      <SafeAreaView style={styles.container}>
+        <EdgeIndicator />
+        <DrawerLayout
+          drawerOpen={drawerOpen}
+          onDrawerOpen={openDrawer}
+          onDrawerClose={closeDrawer}
+          drawerContent={drawerMenuContent}
+          drawerFooter={drawerFooter}
+          drawerLogo={logo}
+          onTabChange={handleTabChange}
+          tabButtons={tabButtonsConfig.map((tab) => ({
+            ...tab,
+            isActive: activeTab === tab.label,
+          }))}
+        >
+          {currentScreen === 'customers' ? (
+            <CustomersListScreen />
+          ) : currentScreen === 'deliveries' ? (
+            <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
+          ) : currentScreen === 'stock' ? (
+            <StockScreen userRole="employee" />
+          ) : currentScreen === 'expense' ? (
+            <ExpenseScreen onAddPress={() => setCurrentScreen('addExpense')} />
+          ) : currentScreen === 'addExpense' ? (
+            <AddExpenseScreen onBack={() => setCurrentScreen('expense')} />
+          ) : currentScreen === 'addCustomer' ? (
+            <AddCustomerScreen onBack={() => setCurrentScreen('dashboard')} />
+          ) : currentScreen === 'pastDeliveries' ? (
+            <PastDeliveriesScreen onBack={() => setCurrentScreen('dashboard')} />
+          ) : currentScreen === 'paymentBalances' ? (
+            <PaymentBalancesScreen onBack={() => setCurrentScreen('dashboard')} />
+          ) : currentScreen === 'extraCan' ? (
+            <ExtraCanHoldingsScreen onBack={() => setCurrentScreen('dashboard')} />
+          ) : currentScreen === 'pastSales' ? (
+            <PastSalesScreen onBack={() => setCurrentScreen('dashboard')} />
+          ) : currentScreen === 'pastExpenses' ? (
+            <PastExpensesScreen onBack={() => setCurrentScreen('dashboard')} />
+          ) : currentScreen === 'counterSale' ? (
+            <PlaceholderCard
+              title="Counter Sale"
+              subtitle="Quick counter billing will appear here."
+              icon="cart-outline"
+            />
+          ) : (
+            <ScrollView
+              style={styles.content}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={loading} onRefresh={loadEmployeeData} />
+              }
+            >
+              <View style={styles.topRow}>
+                <Text style={styles.welcome}>Welcome, {userName || 'Employee'}</Text>
+                <View style={styles.datePill}>
+                  <MaterialCommunityIcons name="calendar" size={16} color="#475569" />
+                  <Text style={styles.snapshotDate}>{snapshotLabel}</Text>
+                </View>
+              </View>
 
-          <View style={{ height: 24 }} />
-        </ScrollView>
-        )}
-      </DrawerLayout>
-    </SafeAreaView>
-  );
-}
+              <Text style={styles.sectionLabel}>Deliveries</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
+                  <StatCard icon="playlist-check" label="Pending deliveries" value={stats.pendingDeliveries} />
+                  <StatCard icon="truck-delivery" label="Delivered today" value={stats.deliveredToday} />
+                </View>
+                <View style={styles.statsRow}>
+                  <StatCard icon="bottle-soda" label="Delivered cans" value={stats.deliveredCans} />
+                  <StatCard icon="bottle-wine" label="Empty collected" value={stats.emptyCollected} />
+                </View>
+              </View>
+
+              <Text style={styles.sectionLabel}>Sales & Cash</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
+                  <StatCard icon="cash-plus" label="Cash payments" value={currencyINR(stats.cashPayment)} />
+                  <StatCard icon="credit-card" label="Online payments" value={currencyINR(stats.onlinePayment)} />
+                </View>
+                <View style={styles.statsRow}>
+                  <StatCard icon="cash" label="Sale" value={currencyINR(stats.sale)} bgColor="#f0fdf4" />
+                  <StatCard icon="hand-coin" label="Pending received" value={currencyINR(stats.pendingPaymentsReceived)} bgColor="#f5f3ff" />
+                </View>
+                <View style={styles.statsRow}>
+                  <StatCard icon="chart-line" label="Expense" value={currencyINR(stats.expense)} bgColor="#fff5f5" />
+                  <StatCard icon="wallet" label="In-hand cash" value={currencyINR(stats.inHandCash)} bgColor="#ecfeff" />
+                </View>
+              </View>
+
+              <Text style={styles.sectionLabel}>Inventory</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
+                  <StatCard icon="water" label="20L full" value={stats.stock20L} />
+                  <StatCard icon="bottle-wine" label="Empty cans" value={stats.stock20LEmpty} />
+                </View>
+                <View style={styles.statsRow}>
+                  <StatCard icon="bottle-soda-outline" label="Extra cans" value={stats.stock20LExtra} />
+                  <StatCard icon="warehouse" label="Total stock" value={stats.stockTotal} />
+                </View>
+              </View>
+
+              <Text style={styles.sectionLabel}>Customers</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
+                  <StatCard icon="home-account" label="Residence" value={stats.customersResidence} />
+                  <StatCard icon="store" label="Shop" value={stats.customersShop} />
+                </View>
+                <View style={styles.statsRow}>
+                  <StatCard icon="party-popper" label="Party" value={stats.customersParty} />
+                  <StatCard icon="account-multiple" label="Total customers" value={stats.customers} />
+                </View>
+              </View>
+
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          )}
+        </DrawerLayout>
+      </SafeAreaView>
+    );
+  }
 
 const styles = StyleSheet.create({
   container: {
