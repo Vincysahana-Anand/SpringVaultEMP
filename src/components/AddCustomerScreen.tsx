@@ -18,6 +18,7 @@ export default function AddCustomerScreen({ onBack }: Props) {
   const [street, setStreet] = useState('');
   const [area, setArea] = useState('');
   const [customerType, setCustomerType] = useState<'Residence' | 'Shop' | 'Party'>('Residence');
+  const [billingType, setBillingType] = useState<'Cash' | 'Monthly Payment'>('Cash');
   const [canHolding, setCanHolding] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [price, setPrice] = useState('');
@@ -85,7 +86,7 @@ export default function AddCustomerScreen({ onBack }: Props) {
         area: area.trim(),
         advanceAmount: advanceVal,
         customerType,
-        billingType: 'Cash',
+        billingType,
         price: priceVal,
         ...(isShopOrParty
           ? {
@@ -162,6 +163,26 @@ export default function AddCustomerScreen({ onBack }: Props) {
               onPress={() => setCustomerType(type)}
             >
               <Text style={[styles.badgeText, customerType === type && styles.badgeTextActive]}>{type}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={[styles.fieldGroup, { gap: 10 }]}> 
+        <Text style={styles.label}>Billing Type</Text>
+        <View style={styles.badgeRow}>
+          {([
+            { label: 'Cash', value: 'Cash' as const },
+            { label: 'Monthly', value: 'Monthly Payment' as const },
+          ] as const).map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.badge, billingType === opt.value && styles.badgeActive]}
+              onPress={() => setBillingType(opt.value)}
+            >
+              <Text style={[styles.badgeText, billingType === opt.value && styles.badgeTextActive]}>
+                {opt.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>

@@ -250,6 +250,35 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
         <Text style={[styles.sectionTitle, { marginTop: spacing[24] }]}>Billing</Text>
 
         <View style={styles.formGroup}>
+          <Text style={styles.label}>Billing Type</Text>
+          <View style={styles.billingSelector}>
+            {[
+              { label: 'Cash', value: 'Cash' },
+              { label: 'Monthly', value: 'Monthly Payment' },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  styles.billingButton,
+                  formData.billingType === opt.value && styles.billingButtonActive,
+                ]}
+                onPress={() => updateField('billingType', opt.value)}
+                disabled={loading}
+              >
+                <Text
+                  style={[
+                    styles.billingButtonText,
+                    formData.billingType === opt.value && styles.billingButtonTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.formGroup}>
           <Text style={styles.label}>Advance Amount</Text>
           <TextInput
             style={styles.input}
@@ -260,32 +289,6 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
             keyboardType="decimal-pad"
             editable={!loading}
           />
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Billing Type</Text>
-          <View style={styles.billingSelector}>
-            {['Cash', 'Rotational Payment', 'Monthly Payment', 'Online'].map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.billingButton,
-                  formData.billingType === type && styles.billingButtonActive,
-                ]}
-                onPress={() => updateField('billingType', type)}
-                disabled={loading}
-              >
-                <Text
-                  style={[
-                    styles.billingButtonText,
-                    formData.billingType === type && styles.billingButtonTextActive,
-                  ]}
-                >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
         </View>
 
         <View style={styles.formGroup}>
@@ -512,15 +515,18 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
   },
   billingSelector: {
-    gap: spacing[8],
+    flexDirection: 'row',
+    gap: spacing[10],
   },
   billingButton: {
+    flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     paddingVertical: spacing[10],
     paddingHorizontal: spacing[12],
     backgroundColor: colors.bg.white,
+    alignItems: 'center',
   },
   billingButtonActive: {
     borderColor: colors.primary[500],
@@ -530,6 +536,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.medium,
     color: colors.gray[700],
+    textAlign: 'center',
   },
   billingButtonTextActive: {
     color: colors.primary[700],
