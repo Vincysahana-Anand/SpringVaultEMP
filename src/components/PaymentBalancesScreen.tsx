@@ -26,6 +26,8 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const [payRef, setPayRef] = useState('');
   const [submittingPay, setSubmittingPay] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [billingFilter, setBillingFilter] = useState<'all' | 'cash' | 'monthly'>('all');
+  const [showBillingFilterModal, setShowBillingFilterModal] = useState(false);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -76,10 +78,21 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       .join(' ')
       .trim();
 
+  const isMonthlyBilling = (customer: Customer) =>
+    String(customer.billingType || '').toLowerCase().includes('monthly');
+
+  const billingFilteredCustomers = useMemo(() => {
+    if (billingFilter === 'all') return customers;
+    return customers.filter((c) => {
+      const monthly = isMonthlyBilling(c);
+      return billingFilter === 'monthly' ? monthly : !monthly;
+    });
+  }, [customers, billingFilter]);
+
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return customers;
+    if (!searchQuery.trim()) return billingFilteredCustomers;
     const q = searchQuery.toLowerCase();
-    return customers.filter(c => {
+    return billingFilteredCustomers.filter(c => {
       const fullAddress = buildFullAddress(c).toLowerCase();
       if (c.name?.toLowerCase().includes(q)) return true;
       if (c.mobile?.includes(q)) return true;
@@ -87,7 +100,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       if (c.alternateContacts?.some(contact => contact?.toLowerCase().includes(q))) return true;
       return false;
     });
-  }, [customers, searchQuery]);
+  }, [billingFilteredCustomers, searchQuery]);
 
   const totalBalance = useMemo(
     () => filtered.reduce((sum, c) => sum + (typeof c.balance === 'number' ? c.balance : 0), 0),
@@ -213,6 +226,9 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           <TouchableOpacity style={styles.payBtn} onPress={() => openPayModal(item)}>
             <MaterialCommunityIcons name="cash-multiple" size={20} color="#0ea5e9" />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.printBtn} onPress={() => {}}>
+            <MaterialCommunityIcons name="printer-outline" size={20} color="#0f172a" />
+          </TouchableOpacity>
         </View>
         <Text style={styles.sub}>{item.mobile}</Text>
         <Text style={styles.sub}>{fullAddress || 'No address provided'}</Text>
@@ -244,9 +260,19 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           </TouchableOpacity>
         ) : null}
         <Text style={styles.headerTitle}>Payment Balances</Text>
-        <TouchableOpacity onPress={() => setShowHistory(true)} style={styles.historyBtn}>
-          <MaterialCommunityIcons name="history" size={20} color="#0f172a" />
-        </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => setShowBillingFilterModal(true)} style={styles.historyBtn}>
+            <MaterialCommunityIcons
+              name="filter-variant"
+              size={20}
+              color={billingFilter === 'monthly' ? '#0ea5e9' : '#0f172a'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowHistory(true)} style={styles.historyBtn}>
+            <MaterialCommunityIcons name="history" size={20} color="#0f172a" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchBar}>
@@ -366,6 +392,59 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={showBillingFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBillingFilterModal(false)}
+      >
+        <Pressable style={styles.filterOverlay} onPress={() => setShowBillingFilterModal(false)}>
+          <Pressable style={styles.filterCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.filterTitle}>Filter Billing Type</Text>
+
+            <TouchableOpacity
+              style={[styles.filterOption, billingFilter === 'all' ? styles.filterOptionActive : null]}
+              onPress={() => {
+                setBillingFilter('all');
+                setShowBillingFilterModal(false);
+              }}
+            >
+              <Text style={[styles.filterOptionText, billingFilter === 'all' ? styles.filterOptionTextActive : null]}>
+                All
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterOption, billingFilter === 'cash' ? styles.filterOptionActive : null]}
+              onPress={() => {
+                setBillingFilter('cash');
+                setShowBillingFilterModal(false);
+              }}
+            >
+              <Text style={[styles.filterOptionText, billingFilter === 'cash' ? styles.filterOptionTextActive : null]}>
+                Cash
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterOption, billingFilter === 'monthly' ? styles.filterOptionActive : null]}
+              onPress={() => {
+                setBillingFilter('monthly');
+                setShowBillingFilterModal(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.filterOptionText,
+                  billingFilter === 'monthly' ? styles.filterOptionTextActive : null,
+                ]}
+              >
+                Monthly
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -375,6 +454,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingTop: 8 },
   backBtn: { padding: 6, marginRight: 6 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   historyBtn: { padding: 6, marginLeft: 6 },
   searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginBottom: 8, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fff', gap: 8 },
   searchInput: { flex: 1, color: '#0f172a', paddingVertical: 0 },
@@ -384,6 +464,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0f172a' },
   balance: { fontWeight: '700' },
   payBtn: { padding: 6, marginLeft: 6 },
+  printBtn: { padding: 6 },
   sub: { marginTop: 4, color: '#475569', fontSize: 13 },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
   summaryBar: {
@@ -432,4 +513,21 @@ const styles = StyleSheet.create({
   fieldInput: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, color: '#0f172a', backgroundColor: '#fff' },
   saveBtn: { marginTop: 6, backgroundColor: '#0ea5e9', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '700' },
+
+  filterOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 16 },
+  filterCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
+  filterTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 10 },
+  filterOption: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  filterOptionActive: { borderColor: '#0ea5e9', backgroundColor: '#e0f2fe' },
+  filterOptionText: { color: '#0f172a', fontWeight: '600' },
+  filterOptionTextActive: { color: '#0ea5e9' },
 });
