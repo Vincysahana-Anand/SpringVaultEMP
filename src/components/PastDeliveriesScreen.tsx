@@ -199,12 +199,12 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
       )}
 
       <View style={styles.summaryBar}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Cans delivered</Text>
+        <View style={styles.summaryBadge}>
+          <Text style={styles.summaryLabel}>cans delivered</Text>
           <Text style={styles.summaryValue}>{totals.delivered}</Text>
         </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Empty collected</Text>
+        <View style={styles.summaryBadge}>
+          <Text style={styles.summaryLabel}>empty collected</Text>
           <Text style={styles.summaryValue}>{totals.empty}</Text>
         </View>
       </View>
@@ -262,10 +262,35 @@ const styles = StyleSheet.create({
   sub: { marginTop: 6, color: '#475569', fontSize: 13 },
   meta: { marginTop: 4, color: '#94a3b8', fontSize: 12 },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
-  summaryBar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', padding: 12, backgroundColor: '#0f172a', borderTopLeftRadius: 14, borderTopRightRadius: 14 },
-  summaryItem: { flex: 1 },
-  summaryLabel: { color: '#cbd5e1', fontSize: 12 },
-  summaryValue: { color: '#fff', fontWeight: '800', fontSize: 18, marginTop: 2 },
+  summaryBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  summaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minWidth: 150,
+    justifyContent: 'space-between',
+  },
+  summaryLabel: { color: '#475569', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+  summaryValue: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
 });
 
 const sanitizeKey = (value?: string) => (value || '').toString().replace(/[^a-z0-9]/gi, '').toLowerCase();

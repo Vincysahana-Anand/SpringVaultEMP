@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   BackHandler,
   Platform,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -19,6 +21,7 @@ interface Props { onBack?: () => void; }
 
 export default function PastSalesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const today = getISTDate();
     today.setHours(0, 0, 0, 0);
@@ -95,6 +98,12 @@ export default function PastSalesScreen({ onBack }: Props) {
     </View>
   );
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(selectedDate);
+    setRefreshing(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -133,39 +142,45 @@ export default function PastSalesScreen({ onBack }: Props) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.dateBar}>
-        <TouchableOpacity onPress={() => goToDay(-1)} style={styles.dateBtn}>
-          <MaterialCommunityIcons name="chevron-left" size={22} color="#0f172a" />
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.dateTitle}>{dateLabel}</Text>
-          <Text style={styles.dateSubtitle}>Sales summary</Text>
-        </View>
-        <TouchableOpacity onPress={() => goToDay(1)} style={styles.dateBtn}>
-          <MaterialCommunityIcons name="chevron-right" size={22} color="#0f172a" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.salesHeader}>
-          <Text style={styles.salesTitle}>Totals</Text>
-          {loading ? <ActivityIndicator size="small" color="#0ea5e9" /> : null}
-        </View>
-        {sales || loading ? (
-          <View style={styles.salesGrid}>
-            <SalesStat label="Cash payments" value={salesTotals.cashPayment} />
-            <SalesStat label="Online payments" value={salesTotals.onlinePayment} />
-            <SalesStat label="Cash bills" value={salesTotals.cashBillsPayment} />
-            <SalesStat label="Online bills" value={salesTotals.onlineBillsPayment} />
-            <SalesStat label="Expense" value={salesTotals.expense} />
-            <SalesStat label="Total sale" value={salesTotals.totalSale} bold />
-            <SalesStat label="Pending payments received" value={salesTotals.pendingPaymentsReceived} highlight />
-            <SalesStat label="In-hand cash" value={salesTotals.inHandCash} highlight />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0ea5e9']} tintColor="#0ea5e9" />}
+      >
+        <View style={styles.dateBar}>
+          <TouchableOpacity onPress={() => goToDay(-1)} style={styles.dateBtn}>
+            <MaterialCommunityIcons name="chevron-left" size={22} color="#0f172a" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.dateTitle}>{dateLabel}</Text>
+            <Text style={styles.dateSubtitle}>Sales summary</Text>
           </View>
-        ) : (
-          <Text style={styles.empty}>No sales found</Text>
-        )}
-      </View>
+          <TouchableOpacity onPress={() => goToDay(1)} style={styles.dateBtn}>
+            <MaterialCommunityIcons name="chevron-right" size={22} color="#0f172a" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.salesHeader}>
+            <Text style={styles.salesTitle}>Totals</Text>
+            {loading ? <ActivityIndicator size="small" color="#0ea5e9" /> : null}
+          </View>
+          {sales || loading ? (
+            <View style={styles.salesGrid}>
+              <SalesStat label="Cash payments" value={salesTotals.cashPayment} />
+              <SalesStat label="Online payments" value={salesTotals.onlinePayment} />
+              <SalesStat label="Cash bills" value={salesTotals.cashBillsPayment} />
+              <SalesStat label="Online bills" value={salesTotals.onlineBillsPayment} />
+              <SalesStat label="Expense" value={salesTotals.expense} />
+              <SalesStat label="Total sale" value={salesTotals.totalSale} bold />
+              <SalesStat label="Pending payments received" value={salesTotals.pendingPaymentsReceived} highlight />
+              <SalesStat label="In-hand cash" value={salesTotals.inHandCash} highlight />
+            </View>
+          ) : (
+            <Text style={styles.empty}>No sales found</Text>
+          )}
+        </View>
+      </ScrollView>
 
       {Platform.OS === 'ios' && showPicker ? (
         <DateTimePicker

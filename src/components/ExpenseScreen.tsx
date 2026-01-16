@@ -79,7 +79,7 @@ export default function ExpenseScreen({ onAddPress }: { onAddPress?: () => void 
           data={expenses}
           keyExtractor={(item, idx) => item.id ?? String(idx)}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 16 }}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 16, paddingHorizontal: 16 }}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={() => (
             <Text style={styles.empty}>No expenses recorded today</Text>

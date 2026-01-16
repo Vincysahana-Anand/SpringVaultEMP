@@ -89,6 +89,11 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     });
   }, [customers, searchQuery]);
 
+  const totalBalance = useMemo(
+    () => filtered.reduce((sum, c) => sum + (typeof c.balance === 'number' ? c.balance : 0), 0),
+    [filtered]
+  );
+
   const openPayModal = (customer: Customer) => {
     setPayCustomer(customer);
     setPayMethod('cash');
@@ -267,7 +272,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           data={filtered}
           keyExtractor={(item, idx) => item.id || String(idx)}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 12, paddingBottom: 24 }}
+          contentContainerStyle={{ padding: 12, paddingBottom: 96 }}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={<Text style={styles.empty}>No balances to show</Text>}
           refreshControl={
@@ -284,6 +289,15 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
           }
         />
       )}
+
+      {!loading ? (
+        <View style={styles.summaryBar}>
+          <View style={styles.summaryBadge}>
+            <Text style={styles.summaryLabel}>total</Text>
+            <Text style={styles.summaryValue}>₹{totalBalance.toFixed(2)}</Text>
+          </View>
+        </View>
+      ) : null}
 
       <Modal visible={showPayModal} transparent animationType="fade" onRequestClose={() => setShowPayModal(false)}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -372,6 +386,35 @@ const styles = StyleSheet.create({
   payBtn: { padding: 6, marginLeft: 6 },
   sub: { marginTop: 4, color: '#475569', fontSize: 13 },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
+  summaryBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  summaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minWidth: 180,
+    width: '100%',
+    maxWidth: 420,
+  },
+  summaryLabel: { color: '#475569', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+  summaryValue: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 16 },
   modalBackdrop: { ...StyleSheet.absoluteFillObject },
   modalCard: { width: '90%', maxWidth: 420, backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e2e8f0' },

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, Platform, RefreshControl } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { getExpenses, Expense } from '../services/expenseService';
@@ -11,6 +11,7 @@ interface Props { onBack?: () => void; }
 
 export default function PastExpensesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const today = getISTDate();
@@ -148,6 +149,18 @@ export default function PastExpensesScreen({ onBack }: Props) {
           contentContainerStyle={{ padding: 12, paddingBottom: 24 }}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={<Text style={styles.empty}>No expenses found</Text>}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await load();
+                setRefreshing(false);
+              }}
+              colors={["#ef4444"]}
+              tintColor="#ef4444"
+            />
+          }
         />
       )}
 

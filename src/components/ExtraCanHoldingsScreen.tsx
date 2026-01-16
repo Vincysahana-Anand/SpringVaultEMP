@@ -315,7 +315,7 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
             data={filtered}
             keyExtractor={(item, idx) => item.id || String(idx)}
             renderItem={renderItem}
-            contentContainerStyle={{ padding: 12, paddingBottom: 24 }}
+            contentContainerStyle={{ padding: 12, paddingBottom: 96 }}
             ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
             ListEmptyComponent={<Text style={styles.empty}>No extra cans recorded</Text>}
             refreshControl={
@@ -333,7 +333,10 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
           />
 
           <View style={styles.summaryBar}>
-            <Text style={styles.summaryText}>Total extra cans: {totalExtra}</Text>
+            <View style={styles.summaryBadge}>
+              <Text style={styles.summaryLabel}>total extra cans</Text>
+              <Text style={styles.summaryValue}>{totalExtra}</Text>
+            </View>
           </View>
 
           <Modal visible={returnModal} transparent animationType="fade" onRequestClose={() => setReturnModal(false)}>
@@ -400,15 +403,34 @@ const styles = StyleSheet.create({
   sub: { marginTop: 4, color: '#475569', fontSize: 13 },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
   summaryBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     backgroundColor: '#fff',
+    alignItems: 'center',
   },
-  summaryText: { color: '#0f172a', fontWeight: '700' },
+  summaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minWidth: 180,
+    width: '100%',
+    maxWidth: 420,
+  },
+  summaryLabel: { color: '#475569', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+  summaryValue: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
