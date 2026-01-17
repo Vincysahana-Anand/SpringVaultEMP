@@ -18,7 +18,7 @@ import OwnerDashboard from './src/components/OwnerDashboard';
 import EmployeeDashboard from './src/components/EmployeeDashboard';
 import CustomerDashboard from './src/components/CustomerDashboard';
 import InactiveCustomer from './src/components/InactiveCustomer';
-import { getFirestore, collection, query, where, limit, getDocs } from '@react-native-firebase/firestore';
+import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc } from '@react-native-firebase/firestore';
 import { handleServiceError } from './src/services/serviceErrorWrapper';
 import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,12 +68,49 @@ function AppContent() {
         setProfileError('');
         setProfileLoading(true);
         try {
-          // Fetch user profile from Firestore by email
+          // Fetch user profile from Firestore.
+          // Prefer lookup by UID, then fallback to common schemas (id==uid, email).
           const db = getFirestore();
-          const usersQuery = query(collection(db, 'users'), where('email', '==', u.email), limit(1));
-          const snap = await getDocs(usersQuery);
-          if (!snap.empty) {
-            setProfile({ id: snap.docs[0].id, ...snap.docs[0].data() });
+
+          let found: any = null;
+
+          // 1) users/{uid}
+          if (u.uid) {
+            const byUid = await getDoc(doc(db, 'users', u.uid));
+            if (byUid.exists()) {
+              found = { id: byUid.id, ...byUid.data() };
+            }
+          }
+
+          // 2) users where id == uid (some apps store auth uid in a field)
+          if (!found && u.uid) {
+            const byIdField = await getDocs(query(collection(db, 'users'), where('id', '==', u.uid), limit(1)));
+            if (!byIdField.empty) {
+              found = { id: byIdField.docs[0].id, ...byIdField.docs[0].data() };
+            }
+          }
+
+          // 3) users where email == auth email (exact)
+          if (!found && u.email) {
+            const byEmail = await getDocs(query(collection(db, 'users'), where('email', '==', u.email), limit(1)));
+            if (!byEmail.empty) {
+              found = { id: byEmail.docs[0].id, ...byEmail.docs[0].data() };
+            }
+          }
+
+          // 4) users where email == normalized email (handles accidental casing/spaces)
+          const normalizedEmail = String(u.email || '').trim().toLowerCase();
+          if (!found && normalizedEmail) {
+            const byEmailNorm = await getDocs(
+              query(collection(db, 'users'), where('email', '==', normalizedEmail), limit(1))
+            );
+            if (!byEmailNorm.empty) {
+              found = { id: byEmailNorm.docs[0].id, ...byEmailNorm.docs[0].data() };
+            }
+          }
+
+          if (found) {
+            setProfile(found);
           } else {
             setProfileError('No user profile found.');
           }
