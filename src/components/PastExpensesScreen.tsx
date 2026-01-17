@@ -14,9 +14,10 @@ export default function PastExpensesScreen({ onBack }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const today = getISTDate();
-    today.setHours(0, 0, 0, 0);
-    return today;
+    const yesterday = getISTDate();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    return yesterday;
   });
   const [showPicker, setShowPicker] = useState(false);
 

@@ -10,6 +10,7 @@ import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import PaymentHistoryScreen from './PaymentHistoryScreen';
+import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import RNPrint from 'react-native-print';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import Share from 'react-native-share';
@@ -23,6 +24,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
   const [payCustomer, setPayCustomer] = useState<Customer | null>(null);
   const [showPayModal, setShowPayModal] = useState(false);
   const [payMethod, setPayMethod] = useState<'cash' | 'online'>('cash');
@@ -103,6 +105,10 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         setShowPayModal(false);
         return true;
       }
+      if (historyCustomer) {
+        setHistoryCustomer(null);
+        return true;
+      }
       if (selectedCustomer) {
         setSelectedCustomer(null);
         return true;
@@ -114,7 +120,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       return false;
     });
     return () => sub.remove();
-  }, [onBack, selectedCustomer, showPayModal]);
+  }, [onBack, selectedCustomer, showPayModal, historyCustomer]);
 
   const load = async () => {
     try {
@@ -877,13 +883,22 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     );
   };
 
+  if (historyCustomer) {
+    return (
+      <CustomerPurchaseHistoryScreen
+        customer={historyCustomer as any}
+        onBack={() => setHistoryCustomer(null)}
+      />
+    );
+  }
+
   if (selectedCustomer) {
     return (
       <CustomerDetailsScreen
         customer={selectedCustomer as any}
         onBack={() => setSelectedCustomer(null)}
         onEdit={() => {}}
-        onViewHistory={() => {}}
+        onViewHistory={() => setHistoryCustomer(selectedCustomer)}
       />
     );
   }

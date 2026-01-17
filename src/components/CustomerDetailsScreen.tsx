@@ -124,6 +124,9 @@ export default function CustomerDetailsScreen({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Customer Details</Text>
         <TouchableOpacity onPress={onEdit} style={styles.editButton}>
           <MaterialCommunityIcons name="pencil" size={20} color={colors.primary[500]} />

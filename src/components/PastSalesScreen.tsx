@@ -23,9 +23,10 @@ export default function PastSalesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const today = getISTDate();
-    today.setHours(0, 0, 0, 0);
-    return today;
+    const yesterday = getISTDate();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    return yesterday;
   });
   const [showPicker, setShowPicker] = useState(false);
   const [sales, setSales] = useState<SalesRecord | null>(null);

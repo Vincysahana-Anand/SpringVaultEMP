@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { DailyRecordEntry, getDailyRecordsByDate } from '../services/dailyRecordService';
+import { DailyRecordEntry, getDailyRecord } from '../services/dailyRecordService';
 import { getISTDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
@@ -21,7 +21,7 @@ import CustomerDetailsScreen from './CustomerDetailsScreen';
 
 interface Props { onBack?: () => void; }
 
-const EXTRA_CAN_KEYS = ['extraCan', 'extra_can', 'extra can', 'extra-can', '20 liter can', '20 liter party can', '20l', '20l-p'];
+const EMPTY_RETURNED_DOC_ID = 'emptyReturned';
 
 const parseDeliveredAt = (deliveredAt: string): number => {
   if (!deliveredAt) return 0;
@@ -82,22 +82,19 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
   const loadEntries = async (date: Date) => {
     try {
       setLoading(true);
-      const res = await getDailyRecordsByDate(formatDateKey(date));
+      const res = await getDailyRecord(EMPTY_RETURNED_DOC_ID, formatDateKey(date));
       if (Array.isArray(res)) {
-        const extra = res.filter(e => {
-          const product = (e.product || '').toLowerCase();
-          const matchesName = EXTRA_CAN_KEYS.includes(product);
-          const isReturnOnly = (e.emptyQty || 0) > 0 && (e.deliveredQty || 0) === 0;
-          return matchesName || isReturnOnly;
-        });
-        const sorted = extra.sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
+        const onlyReturns = res
+          .filter((e) => (e.emptyQty || 0) > 0)
+          .sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
+        const sorted = onlyReturns;
         setEntries(sorted);
       } else {
-        const err = handleServiceError(res, 'getDailyRecordsByDate');
+        const err = handleServiceError(res, 'getDailyRecord');
         showError(err.message);
       }
     } catch (e) {
-      const err = handleServiceError(e, 'getDailyRecordsByDate');
+      const err = handleServiceError(e, 'getDailyRecord');
       showError(err.message);
     } finally {
       setLoading(false);
@@ -109,9 +106,9 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
   }, [selectedDate]);
 
   const totals = useMemo(() => {
-    const given = entries.reduce((sum, e) => sum + (e.deliveredQty || 0), 0);
     const returned = entries.reduce((sum, e) => sum + (e.emptyQty || 0), 0);
-    return { given, returned };
+    const customers = new Set(entries.map((e) => e.customerId).filter(Boolean)).size;
+    return { returned, customers };
   }, [entries]);
 
   const openCustomerDetails = async (entry: DailyRecordEntry) => {
@@ -160,11 +157,12 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
     return (
       <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => openCustomerDetails(item)}>
         <View style={styles.row}>
-          <MaterialCommunityIcons name="bottle-soda" size={20} color="#8b5cf6" />
+          <MaterialCommunityIcons name="bottle-soda-outline" size={20} color="#8b5cf6" />
           <Text style={styles.title}>{item.customerName}</Text>
           <Text style={styles.amount}>{item.emptyQty || 0}</Text>
         </View>
         <Text style={styles.sub}>{item.customerMobile || ''}</Text>
+        <Text style={styles.sub}>Empty Returned: {item.emptyQty || 0}</Text>
         <Text style={styles.meta}>{when}</Text>
       </TouchableOpacity>
     );
@@ -239,7 +237,7 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.dateTitle}>{dateLabel}</Text>
-          <Text style={styles.dateSubtitle}>Extra cans</Text>
+          <Text style={styles.dateSubtitle}>Empty Returned</Text>
         </View>
         <TouchableOpacity onPress={() => goToDay(1)} style={styles.dateBtn}>
           <MaterialCommunityIcons name="chevron-right" size={22} color="#0f172a" />
@@ -275,6 +273,10 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
         <View style={styles.summaryBadge}>
           <Text style={styles.summaryLabel}>returned</Text>
           <Text style={styles.summaryValue}>{totals.returned}</Text>
+        </View>
+        <View style={styles.summaryBadge}>
+          <Text style={styles.summaryLabel}>customers</Text>
+          <Text style={styles.summaryValue}>{totals.customers}</Text>
         </View>
       </View>
 

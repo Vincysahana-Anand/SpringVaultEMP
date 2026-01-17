@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, Platform, RefreshControl } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { DailyRecordEntry, getDailyRecordsByDate } from '../services/dailyRecordService';
+import { Customer, getCustomers } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import { getISTDate } from '../utils/dateUtils';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import CustomerDetailsScreen from './CustomerDetailsScreen';
+import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 
 interface Props {
   onBack?: () => void;
@@ -14,6 +17,9 @@ interface Props {
 export default function PastDeliveriesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [entries, setEntries] = useState<DailyRecordEntry[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string>('20L_CAN');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const yesterday = getISTDate();
@@ -33,6 +39,14 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (historyCustomer) {
+        setHistoryCustomer(null);
+        return true;
+      }
+      if (selectedCustomer) {
+        setSelectedCustomer(null);
+        return true;
+      }
       if (onBack) {
         onBack();
         return true;
@@ -40,7 +54,22 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
       return false;
     });
     return () => sub.remove();
-  }, [onBack]);
+  }, [onBack, selectedCustomer, historyCustomer]);
+
+  const loadCustomers = async () => {
+    try {
+      const res = await getCustomers();
+      if (Array.isArray(res)) {
+        setCustomers(res);
+      } else {
+        const err = handleServiceError(res, 'getCustomers');
+        showError(err.message);
+      }
+    } catch (e) {
+      const err = handleServiceError(e, 'getCustomers');
+      showError(err.message);
+    }
+  };
 
   const loadEntries = async (date: Date) => {
     try {
@@ -66,6 +95,10 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
     loadEntries(selectedDate);
   }, [selectedDate]);
 
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
   const filteredEntries = useMemo(
     () => entries.filter(e => matchesProduct(e.product, selectedProduct, productOptions)),
     [entries, selectedProduct]
@@ -80,8 +113,18 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
   const renderItem = ({ item }: { item: DailyRecordEntry }) => {
     const ts = parseDeliveredAt(item.deliveredAt);
     const when = new Date(ts).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+    const openCustomer = () => {
+      const found = customers.find((c) => c.id === item.customerId) || null;
+      if (found) {
+        setSelectedCustomer(found);
+      } else {
+        showError('Customer not found');
+      }
+    };
+
     return (
-      <View style={styles.card}>
+      <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={openCustomer}>
         <View style={styles.row}>
           <MaterialCommunityIcons name="truck" size={20} color="#0ea5e9" />
           <Text style={styles.title}>{item.customerName}</Text>
@@ -89,7 +132,7 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
         </View>
         <Text style={styles.sub}>{item.product} • Delivered {item.deliveredQty} • Empty {item.emptyQty}</Text>
         <Text style={styles.meta}>{when}</Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -104,6 +147,26 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
   };
 
   const dateLabel = useMemo(() => formatDisplayDate(selectedDate), [selectedDate]);
+
+  if (historyCustomer) {
+    return (
+      <CustomerPurchaseHistoryScreen
+        customer={historyCustomer as any}
+        onBack={() => setHistoryCustomer(null)}
+      />
+    );
+  }
+
+  if (selectedCustomer) {
+    return (
+      <CustomerDetailsScreen
+        customer={selectedCustomer as any}
+        onBack={() => setSelectedCustomer(null)}
+        onEdit={() => {}}
+        onViewHistory={() => setHistoryCustomer(selectedCustomer)}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>

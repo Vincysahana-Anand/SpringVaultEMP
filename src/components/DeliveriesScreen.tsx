@@ -24,6 +24,7 @@ import { addPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryS
 import { updateSalesRecord } from '../services/salesService';
 import { addDailyRecord, getDailyRecordsByDate, DailyRecordEntry } from '../services/dailyRecordService';
 import { completeDeliveryTransaction } from '../services/deliveryService';
+import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
@@ -31,6 +32,8 @@ import { showError, showSuccess } from '../shared/feedback/messageBus';
 import DropletLoader from './DropletLoader';
 
 type DeliveryTab = 'pending' | 'delivered';
+
+type PendingProductFilter = 'all' | '20L' | '1L' | '500ml' | '300ml';
 
 interface DeliveriesScreenProps {
   userRole?: 'owner' | 'employee';
@@ -43,6 +46,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<DeliveryTab>('pending');
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingProductFilter, setPendingProductFilter] = useState<PendingProductFilter>('all');
+  const [showPendingFilterModal, setShowPendingFilterModal] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -77,7 +82,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
   useEffect(() => {
     filterOrders();
-  }, [searchQuery, orders, activeTab]);
+  }, [searchQuery, orders, activeTab, pendingProductFilter]);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -188,6 +193,20 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
           order.productName?.toLowerCase().includes(query)
         );
       });
+    }
+
+    // Pending product filter (only affects Pending tab)
+    if (activeTab === 'pending' && pendingProductFilter !== 'all') {
+      const normalizeOrderProduct = (name?: string): PendingProductFilter | '' => {
+        const lowerName = (name || '').toLowerCase();
+        if (lowerName.includes('20') && lowerName.includes('liter')) return '20L';
+        if (lowerName.includes('1') && lowerName.includes('liter')) return '1L';
+        if (lowerName.includes('500') && lowerName.includes('ml')) return '500ml';
+        if (lowerName.includes('300') && lowerName.includes('ml')) return '300ml';
+        return '';
+      };
+
+      filtered = filtered.filter((order) => normalizeOrderProduct(order.productName) === pendingProductFilter);
     }
 
     setFilteredOrders(filtered);
@@ -453,8 +472,27 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       
       const result = await getDailyRecordsByDate(dateStr);
       if (Array.isArray(result)) {
+        const normalizeName = (name: string | undefined) =>
+          (name || '').replace(/\s+/g, '').toLowerCase();
+
+        const counterNameNorm = normalizeName(COUNTER_SALES_CUSTOMER_NAME);
+
+        const filtered = result.filter((entry) => {
+          const deliveredQty = Number((entry as any).deliveredQty ?? 0) || 0;
+          if (deliveredQty <= 0) return false;
+
+          if (entry.customerId === COUNTER_SALES_CUSTOMER_ID) return false;
+
+          const nameNorm = normalizeName(entry.customerName);
+          if (nameNorm === 'countersale') return false;
+          if (nameNorm === 'countersales') return false;
+          if (nameNorm === counterNameNorm) return false;
+
+          return true;
+        });
+
         // Reverse to show latest first
-        setCompletedDeliveries([...result].reverse());
+        setCompletedDeliveries([...filtered].reverse());
       } else {
         const err = handleServiceError(result, 'getDailyRecordsByDate');
         showError(err.message);
@@ -859,21 +897,36 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={20} color={colors.gray[400]} style={styles.searchIcon2} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={`Search ${activeTab === 'pending' ? 'pending' : 'delivered'} deliveries...`}
-          placeholderTextColor={colors.gray[400]}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-            <MaterialCommunityIcons name="close-circle" size={20} color={colors.gray[400]} />
+      {/* Search + Filter Row */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchContainer}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.gray[400]} style={styles.searchIcon2} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${activeTab === 'pending' ? 'pending' : 'delivered'} deliveries...`}
+            placeholderTextColor={colors.gray[400]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <MaterialCommunityIcons name="close-circle" size={20} color={colors.gray[400]} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {activeTab === 'pending' && (
+          <TouchableOpacity
+            onPress={() => setShowPendingFilterModal(true)}
+            style={styles.pendingFilterButton}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="filter-variant" size={18} color={colors.primary[600]} />
+            <Text style={styles.pendingFilterButtonText}>
+              {pendingProductFilter === 'all' ? 'All' : pendingProductFilter}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1211,6 +1264,53 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Pending Product Filter Modal */}
+      <Modal
+        visible={showPendingFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPendingFilterModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPendingFilterModal(false)}>
+          <Pressable style={styles.filterModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter by Product</Text>
+              <TouchableOpacity
+                onPress={() => setShowPendingFilterModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <MaterialCommunityIcons name="close" size={24} color={colors.gray[600]} />
+              </TouchableOpacity>
+            </View>
+
+            {(['all', '20L', '1L', '500ml', '300ml'] as PendingProductFilter[]).map((opt) => {
+              const selected = opt === pendingProductFilter;
+              const label = opt === 'all' ? 'All' : opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={styles.filterOptionRow}
+                  onPress={() => {
+                    setPendingProductFilter(opt);
+                    setShowPendingFilterModal(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterOptionText, selected && styles.filterOptionTextSelected]}>
+                    {label}
+                  </Text>
+                  {selected ? (
+                    <MaterialCommunityIcons name="check" size={20} color={colors.primary[600]} />
+                  ) : (
+                    <View style={{ width: 20, height: 20 }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
       </>
     );
   }
@@ -1269,12 +1369,18 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: colors.primary[500],
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[10],
+    marginHorizontal: spacing[16],
+    marginVertical: spacing[12],
+  },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bg.white,
-    marginHorizontal: spacing[16],
-    marginVertical: spacing[12],
     paddingHorizontal: spacing[12],
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -1291,6 +1397,48 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: spacing[4],
+  },
+  pendingFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[6],
+    backgroundColor: colors.bg.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing[10],
+    paddingHorizontal: spacing[12],
+    ...elevation.sm,
+  },
+  pendingFilterButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[800],
+  },
+  filterModalContent: {
+    backgroundColor: colors.bg.white,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    maxWidth: 360,
+    ...elevation.lg,
+  },
+  filterOptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[12],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterOptionText: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[800],
+    fontWeight: typography.fontWeight.medium,
+  },
+  filterOptionTextSelected: {
+    color: colors.primary[700],
+    fontWeight: typography.fontWeight.bold,
   },
   listContent: {
     paddingHorizontal: spacing[16],
