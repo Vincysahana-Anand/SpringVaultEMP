@@ -40,6 +40,10 @@ import DropletLoader from './DropletLoader';
 import CounterSaleScreen from './CounterSaleScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
+import UsersListScreen from './UsersListScreen';
+import AddUserScreen from './AddUserScreen';
+import EditUserScreen from './EditUserScreen';
+import { User } from '../services/userService';
 
 const logo = require('../assets/banner.png');
 
@@ -70,6 +74,8 @@ export default function OwnerDashboard() {
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [usersRefreshKey, setUsersRefreshKey] = useState(0);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [snapshotDate, setSnapshotDate] = useState<Date>(() => {
     const today = getISTDate();
     today.setHours(0, 0, 0, 0);
@@ -106,11 +112,17 @@ export default function OwnerDashboard() {
         return true;
       }
 
+      if (currentScreen === 'addUser' || currentScreen === 'editUser') {
+        setCurrentScreen('users');
+        return true;
+      }
+
       if (
         currentScreen === 'customers' ||
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
+        currentScreen === 'users' ||
         currentScreen === 'pastDeliveries' ||
         currentScreen === 'paymentBalances' ||
         currentScreen === 'extraCan' ||
@@ -285,6 +297,15 @@ export default function OwnerDashboard() {
     <>
       <Text style={styles.drawerTitle}>Quick Access</Text>
       <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
+      <MenuItem
+        icon="account-cog-outline"
+        label="Users"
+        onPress={() => {
+          setCurrentScreen('users');
+          setActiveTab('Home');
+          closeDrawer();
+        }}
+      />
       <MenuItem icon="history" label="Past Deliveries" onPress={() => handleNavigate('pastDeliveries')} />
       <MenuItem icon="wallet-outline" label="Payment Balances" onPress={() => handleNavigate('paymentBalances')} />
       <MenuItem icon="bottle-soda" label="Extra Can Holdings" onPress={() => handleNavigate('extraCan')} />
@@ -374,6 +395,44 @@ export default function OwnerDashboard() {
       >
         {currentScreen === 'customers' ? (
           <CustomersListScreen allowCustomerDelete={true} />
+        ) : currentScreen === 'users' ? (
+          <UsersListScreen
+            refreshKey={usersRefreshKey}
+            onBack={() => {
+              setCurrentScreen('dashboard');
+              setActiveTab('Home');
+              fetchDashboardStats();
+            }}
+            onAdd={() => {
+              setSelectedUser(null);
+              setCurrentScreen('addUser');
+            }}
+            onSelectUser={(u) => {
+              setSelectedUser(u);
+              setCurrentScreen('editUser');
+            }}
+          />
+        ) : currentScreen === 'addUser' ? (
+          <AddUserScreen
+            onBack={() => setCurrentScreen('users')}
+            onSaved={() => {
+              setUsersRefreshKey((k) => k + 1);
+              setCurrentScreen('users');
+            }}
+          />
+        ) : currentScreen === 'editUser' ? (
+          selectedUser ? (
+            <EditUserScreen
+              user={selectedUser}
+              onBack={() => setCurrentScreen('users')}
+              onSaved={() => {
+                setUsersRefreshKey((k) => k + 1);
+                setCurrentScreen('users');
+              }}
+            />
+          ) : (
+            <PlaceholderCard title="User not selected" subtitle="Please open a user from the list." icon="account-alert-outline" />
+          )
         ) : currentScreen === 'deliveries' ? (
           <DeliveriesScreen userRole="owner" isAdmin={true} />
         ) : currentScreen === 'stock' ? (
