@@ -15,6 +15,7 @@ import RNPrint from 'react-native-print';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import Share from 'react-native-share';
 import { WebView } from 'react-native-webview';
+import { BANNER_PNG_DATA_URI } from '../assets/bannerDataUri';
 
 interface Props { onBack?: () => void; }
 
@@ -85,7 +86,9 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       });
       return dataUri || null;
     } catch {
-      return null;
+      // In Android release, fetching bundled assets by URI can fail.
+      // Fall back to a pre-generated data-URI so the banner always renders.
+      return BANNER_PNG_DATA_URI;
     }
   };
 
@@ -258,7 +261,9 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       });
       return dataUri || null;
     } catch {
-      return null;
+      // In Android release, fetching bundled assets by URI can fail.
+      // Fall back to a pre-generated data-URI so the banner always renders.
+      return BANNER_PNG_DATA_URI;
     }
   };
 
@@ -296,9 +301,21 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      @page { size: 57mm auto; margin: 0; }
-      body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; color: #0f172a; }
-      .wrap { width: 57mm; padding: 2mm; box-sizing: border-box; }
+      /*
+        Thermal receipt sizing.
+        Note: Some Android "Save as PDF" flows still show an A4 page, but this forces the content to 58mm.
+      */
+      @page { size: 58mm auto; margin: 0; }
+      html, body { margin: 0; padding: 0; width: 58mm; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+        color: #0f172a;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        display: flex;
+        justify-content: center;
+      }
+      .wrap { width: 58mm; padding: 2mm; box-sizing: border-box; margin: 0 auto; }
       .center { text-align: center; }
       .banner { width: 100%; height: auto; display: block; margin: 0 auto 2mm auto; }
       .address { font-size: 10px; line-height: 14px; padding: 0 2mm; }
