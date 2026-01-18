@@ -42,6 +42,7 @@ import CounterSaleScreen from './CounterSaleScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
 import ReportsScreen from './ReportsScreen';
+import UserProfileScreen from './UserProfileScreen';
 
 const logo = require('../assets/banner.png');
 
@@ -119,6 +120,7 @@ export default function EmployeeDashboard() {
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
+        currentScreen === 'profile' ||
         currentScreen === 'reports' ||
         currentScreen === 'pastDeliveries' ||
         currentScreen === 'paymentBalances' ||
@@ -306,7 +308,6 @@ export default function EmployeeDashboard() {
 
     const drawerMenuContent = (
       <>
-        <Text style={styles.drawerTitle}>Quick Access</Text>
         <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
         {isAdmin ? (
           <MenuItem icon="file-chart-outline" label="Reports" onPress={() => handleNavigate('reports')} />
@@ -400,6 +401,15 @@ export default function EmployeeDashboard() {
         >
           {currentScreen === 'customers' ? (
             <CustomersListScreen allowCustomerDelete={false} />
+          ) : currentScreen === 'profile' ? (
+            <UserProfileScreen
+              allowEdit={isAdmin}
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'deliveries' ? (
             <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'reports' ? (
@@ -486,15 +496,30 @@ export default function EmployeeDashboard() {
                 <RefreshControl refreshing={loading} onRefresh={loadEmployeeData} />
               }
             >
-              <View style={styles.topRow}>
-                <Text style={styles.welcome}>Welcome, {userName || 'Employee'}</Text>
+              <View style={styles.headerContainer}>
+                <View style={styles.headerRowOne}>
+                  <Text style={styles.welcome}>Welcome, {userName || 'Employee'}</Text>
+                  <TouchableOpacity
+                    style={styles.profileButton}
+                    onPress={() => {
+                      setCurrentScreen('profile');
+                      setActiveTab('Home');
+                      closeDrawer();
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="account-circle-outline" size={28} color="#334155" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionLabel}>Deliveries</Text>
                 <View style={styles.datePill}>
                   <MaterialCommunityIcons name="calendar" size={16} color="#475569" />
                   <Text style={styles.snapshotDate}>{snapshotLabel}</Text>
                 </View>
               </View>
-
-              <Text style={styles.sectionLabel}>Deliveries</Text>
               <View style={styles.statsGrid}>
                 <View style={styles.statsRow}>
                   <StatCard icon="playlist-check" label="Pending deliveries" value={stats.pendingDeliveries} />
@@ -573,25 +598,33 @@ const styles = StyleSheet.create({
     columnGap: 12,
     marginBottom: 14,
   },
-  drawerTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    paddingHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 8,
-  },
   welcome: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
   },
-  topRow: {
+  headerContainer: {
+    marginBottom: 12,
+  },
+  headerRowOne: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  profileButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   snapshotDate: {
     color: '#475569',
@@ -602,16 +635,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
   },
   sectionLabel: {
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
     marginTop: 4,
-    marginBottom: 8,
+    marginBottom: 0,
   },
 });

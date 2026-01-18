@@ -45,6 +45,7 @@ import AddUserScreen from './AddUserScreen';
 import EditUserScreen from './EditUserScreen';
 import { User } from '../services/userService';
 import ReportsScreen from './ReportsScreen';
+import UserProfileScreen from './UserProfileScreen';
 
 const logo = require('../assets/banner.png');
 
@@ -124,6 +125,7 @@ export default function OwnerDashboard() {
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
         currentScreen === 'users' ||
+        currentScreen === 'profile' ||
         currentScreen === 'reports' ||
         currentScreen === 'pastDeliveries' ||
         currentScreen === 'paymentBalances' ||
@@ -297,7 +299,6 @@ export default function OwnerDashboard() {
 
   const drawerMenuContent = (
     <>
-      <Text style={styles.drawerTitle}>Quick Access</Text>
       <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
       <MenuItem icon="file-chart-outline" label="Reports" onPress={() => handleNavigate('reports')} />
       <MenuItem
@@ -398,6 +399,15 @@ export default function OwnerDashboard() {
       >
         {currentScreen === 'customers' ? (
           <CustomersListScreen allowCustomerDelete={true} />
+        ) : currentScreen === 'profile' ? (
+          <UserProfileScreen
+            allowEdit={true}
+            onBack={() => {
+              setCurrentScreen('dashboard');
+              setActiveTab('Home');
+              fetchDashboardStats();
+            }}
+          />
         ) : currentScreen === 'users' ? (
           <UsersListScreen
             refreshKey={usersRefreshKey}
@@ -522,15 +532,30 @@ export default function OwnerDashboard() {
               <RefreshControl refreshing={loading} onRefresh={fetchDashboardStats} />
             }
           >
-          <View style={styles.topRow}>
-            <Text style={styles.welcome}>Welcome, Admin</Text>
+          <View style={styles.headerContainer}>
+            <View style={styles.headerRowOne}>
+              <Text style={styles.welcome}>Welcome, Admin</Text>
+              <TouchableOpacity
+                style={styles.profileButton}
+                onPress={() => {
+                  setCurrentScreen('profile');
+                  setActiveTab('Home');
+                  closeDrawer();
+                }}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="account-circle-outline" size={28} color="#334155" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionLabel}>Deliveries</Text>
             <View style={styles.datePill}>
               <MaterialCommunityIcons name="calendar" size={16} color="#475569" />
               <Text style={styles.snapshotDate}>{snapshotLabel}</Text>
             </View>
           </View>
-
-          <Text style={styles.sectionLabel}>Deliveries</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statsRow}>
               <StatCard icon="playlist-check" label="Pending deliveries" value={stats.pendingDeliveries} />
@@ -605,11 +630,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1f2937',
   },
-  topRow: {
+  headerContainer: {
+    marginBottom: 12,
+  },
+  headerRowOne: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  profileButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   snapshotDate: {
     color: '#475569',
@@ -620,10 +662,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
   },
   statsGrid: {
     marginBottom: 16,
@@ -639,13 +681,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
     marginTop: 4,
-    marginBottom: 8,
-  },
-  drawerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1f2937',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 0,
   },
 });
