@@ -32,32 +32,18 @@ export default function CustomerPurchaseHistoryScreen({
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const parseDeliveredAtTimestamp = (record: PurchaseRecord) => {
-    const raw = record.deliveredAt || '';
-    // Support dd/MM/yy and dd/MM/yyyy with optional AM/PM
-    const match = raw.match(/(\d{2})\/(\d{2})\/(\d{2,4}).*?(\d{2}):(\d{2})\s*([AaPp][Mm])?/);
-    if (match) {
-      const [, dd, mm, yy, hh, min, meridiem] = match;
-      const yearNum = parseInt(yy, 10);
-      const year = yy.length === 2 ? 2000 + yearNum : yearNum;
-      let hours = parseInt(hh, 10);
-      if (meridiem) {
-        const isPM = meridiem.toLowerCase() === 'pm';
-        hours = (hours % 12) + (isPM ? 12 : 0);
-      }
-      const date = new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10), hours, parseInt(min, 10));
-      const ts = date.getTime();
-      if (!Number.isNaN(ts)) return ts;
+  useEffect(() => {
+    if (!customer?.id) {
+      showError('Unable to open purchase history. Customer id is missing.');
     }
-
-    const parsedDelivered = new Date(raw).getTime();
-    if (!Number.isNaN(parsedDelivered)) return parsedDelivered;
-
-    const fallback = record.orderedAt ? new Date(record.orderedAt).getTime() : NaN;
-    return Number.isNaN(fallback) ? 0 : fallback;
-  };
+  }, [customer?.id]);
 
   const loadHistory = useCallback(async () => {
+    if (!customer?.id) {
+      setPurchases([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const result = await getCustomerPurchaseHistory(customer.id);
@@ -74,7 +60,7 @@ export default function CustomerPurchaseHistoryScreen({
     } finally {
       setLoading(false);
     }
-  }, [customer.id]);
+  }, [customer?.id]);
 
   useEffect(() => {
     loadHistory();

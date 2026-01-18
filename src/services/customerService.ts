@@ -28,7 +28,10 @@ export const getCustomers = async (): Promise<Customer[] | ServiceError> => {
   try {
     const db = getFirestore();
     const snapshot = await getDocs(collection(db, 'customers'));
-    return snapshot.docs.map((doc: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Customer));
+    // Spread Firestore data first, then set `id` last so it cannot be overridden by a stored `id` field.
+    return snapshot.docs.map(
+      (doc: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({ ...doc.data(), id: doc.id } as Customer)
+    );
   } catch (error) {
     return handleServiceError(error, 'getCustomers');
   }
@@ -118,7 +121,8 @@ export const searchCustomers = async (term: string): Promise<Customer[] | Servic
     const map: Record<string, Customer> = {};
     snapshots.forEach((snap) => {
       snap.forEach((doc) => {
-        map[doc.id] = { id: doc.id, ...doc.data() } as Customer;
+        // Ensure id is always the Firestore document id.
+        map[doc.id] = { ...doc.data(), id: doc.id } as Customer;
       });
     });
 

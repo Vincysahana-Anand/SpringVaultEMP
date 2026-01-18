@@ -44,6 +44,7 @@ import UsersListScreen from './UsersListScreen';
 import AddUserScreen from './AddUserScreen';
 import EditUserScreen from './EditUserScreen';
 import { User } from '../services/userService';
+import ReportsScreen from './ReportsScreen';
 
 const logo = require('../assets/banner.png');
 
@@ -123,6 +124,7 @@ export default function OwnerDashboard() {
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
         currentScreen === 'users' ||
+        currentScreen === 'reports' ||
         currentScreen === 'pastDeliveries' ||
         currentScreen === 'paymentBalances' ||
         currentScreen === 'extraCan' ||
@@ -297,6 +299,7 @@ export default function OwnerDashboard() {
     <>
       <Text style={styles.drawerTitle}>Quick Access</Text>
       <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
+      <MenuItem icon="file-chart-outline" label="Reports" onPress={() => handleNavigate('reports')} />
       <MenuItem
         icon="account-cog-outline"
         label="Users"
@@ -435,6 +438,14 @@ export default function OwnerDashboard() {
           )
         ) : currentScreen === 'deliveries' ? (
           <DeliveriesScreen userRole="owner" isAdmin={true} />
+        ) : currentScreen === 'reports' ? (
+          <ReportsScreen
+            onBack={() => {
+              setCurrentScreen('dashboard');
+              setActiveTab('Home');
+              fetchDashboardStats();
+            }}
+          />
         ) : currentScreen === 'stock' ? (
           <StockScreen userRole="owner" />
         ) : currentScreen === 'expense' ? (

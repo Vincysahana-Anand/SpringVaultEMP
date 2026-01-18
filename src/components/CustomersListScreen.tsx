@@ -65,6 +65,15 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
 
+  const openPurchaseHistory = (customer: Customer | null) => {
+    const id = customer?.id;
+    if (!id) {
+      showError('Customer not found. Please refresh and try again.');
+      return;
+    }
+    setHistoryCustomer({ ...customer, id } as Customer);
+  };
+
   useEffect(() => {
     loadCustomers();
     loadProducts();
@@ -432,7 +441,7 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
               customer={selectedCustomer}
               onBack={() => setSelectedCustomer(null)}
               onEdit={() => setSelectedCustomer({ ...selectedCustomer, id: `edit-${selectedCustomer.id}` })}
-              onViewHistory={() => setHistoryCustomer(selectedCustomer)}
+              onViewHistory={() => openPurchaseHistory(selectedCustomer)}
               allowDelete={allowCustomerDelete}
               onDeleted={(customerId) => {
                 setCustomers((prev) => prev.filter((c) => c.id !== customerId));

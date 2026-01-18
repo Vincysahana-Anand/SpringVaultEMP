@@ -1,5 +1,5 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc } from '@react-native-firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, getDocs, FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getISTDate } from '../utils/dateUtils';
 
 export interface SalesRecord {
@@ -140,11 +140,18 @@ export const getSalesRecordsByDateRange = async (
 ): Promise<{ [date: string]: SalesRecord } | ServiceError> => {
   try {
     const db = getFirestore();
-    const salesCollection = collection(db, 'sales');
+    const snapshot = await getDocs(collection(db, 'sales'));
+    if (snapshot.empty) return {};
 
-    // Note: This is a simple implementation. For production, use proper Firestore query
-    // For now, return empty object - should be implemented with proper querying
-    return {};
+    const out: { [date: string]: SalesRecord } = {};
+    snapshot.forEach((docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
+      const dateKey = docSnap.id;
+      // dateKey is YYYY-MM-DD, so lexical compare matches chronological order.
+      if (dateKey >= startDate && dateKey <= endDate) {
+        out[dateKey] = docSnap.data() as SalesRecord;
+      }
+    });
+    return out;
   } catch (error) {
     console.error('Error in getSalesRecordsByDateRange:', error);
     return handleServiceError(error, 'getSalesRecordsByDateRange');

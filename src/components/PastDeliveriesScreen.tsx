@@ -148,6 +148,15 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
 
   const dateLabel = useMemo(() => formatDisplayDate(selectedDate), [selectedDate]);
 
+  const openPurchaseHistory = (customer: any) => {
+    const id = customer?.id;
+    if (!id) {
+      showError('Customer not found. Please refresh and try again.');
+      return;
+    }
+    setHistoryCustomer({ ...customer, id });
+  };
+
   if (historyCustomer) {
     return (
       <CustomerPurchaseHistoryScreen
@@ -163,7 +172,7 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
         customer={selectedCustomer as any}
         onBack={() => setSelectedCustomer(null)}
         onEdit={() => {}}
-        onViewHistory={() => setHistoryCustomer(selectedCustomer)}
+        onViewHistory={() => openPurchaseHistory(selectedCustomer)}
       />
     );
   }

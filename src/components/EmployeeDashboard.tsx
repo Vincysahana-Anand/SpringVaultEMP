@@ -41,6 +41,7 @@ import DropletLoader from './DropletLoader';
 import CounterSaleScreen from './CounterSaleScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
+import ReportsScreen from './ReportsScreen';
 
 const logo = require('../assets/banner.png');
 
@@ -118,6 +119,7 @@ export default function EmployeeDashboard() {
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
+        currentScreen === 'reports' ||
         currentScreen === 'pastDeliveries' ||
         currentScreen === 'paymentBalances' ||
         currentScreen === 'extraCan' ||
@@ -280,6 +282,11 @@ export default function EmployeeDashboard() {
     const closeDrawer = () => setDrawerOpen(false);
 
     const handleNavigate = (screen: string) => {
+      if (screen === 'reports' && !isAdmin) {
+        showError('Admin access required');
+        closeDrawer();
+        return;
+      }
       setCurrentScreen(screen);
       closeDrawer();
     };
@@ -301,6 +308,9 @@ export default function EmployeeDashboard() {
       <>
         <Text style={styles.drawerTitle}>Quick Access</Text>
         <MenuItem icon="account-plus" label="Add Customer" onPress={() => handleNavigate('addCustomer')} />
+        {isAdmin ? (
+          <MenuItem icon="file-chart-outline" label="Reports" onPress={() => handleNavigate('reports')} />
+        ) : null}
         <MenuItem icon="history" label="Past Deliveries" onPress={() => handleNavigate('pastDeliveries')} />
         <MenuItem icon="wallet-outline" label="Payment Balances" onPress={() => handleNavigate('paymentBalances')} />
         <MenuItem icon="bottle-soda" label="Extra Can Holdings" onPress={() => handleNavigate('extraCan')} />
@@ -392,6 +402,14 @@ export default function EmployeeDashboard() {
             <CustomersListScreen allowCustomerDelete={false} />
           ) : currentScreen === 'deliveries' ? (
             <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
+          ) : currentScreen === 'reports' ? (
+            <ReportsScreen
+              onBack={() => {
+                setCurrentScreen('dashboard');
+                setActiveTab('Home');
+                loadEmployeeData();
+              }}
+            />
           ) : currentScreen === 'stock' ? (
             <StockScreen userRole="employee" />
           ) : currentScreen === 'expense' ? (

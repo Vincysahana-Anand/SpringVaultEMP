@@ -149,6 +149,16 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
 
   useEffect(() => { load(); }, []);
 
+  const openPurchaseHistory = (customer: Customer | null) => {
+    const id = customer?.id;
+    if (!id) {
+      showError('Customer not found. Please refresh and try again.');
+      return;
+    }
+    // Snapshot the customer so history screen always receives a stable object.
+    setHistoryCustomer({ ...customer, id } as Customer);
+  };
+
   const buildFullAddress = (customer?: Partial<Customer> | null) => {
     if (!customer) return '';
     return [
@@ -915,7 +925,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         customer={selectedCustomer as any}
         onBack={() => setSelectedCustomer(null)}
         onEdit={() => {}}
-        onViewHistory={() => setHistoryCustomer(selectedCustomer)}
+        onViewHistory={() => openPurchaseHistory(selectedCustomer)}
       />
     );
   }
