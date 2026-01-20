@@ -43,7 +43,10 @@ interface DeliveriesScreenProps {
 export default function DeliveriesScreen({ userRole = 'employee', isAdmin = false }: DeliveriesScreenProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [filteredCompletedDeliveries, setFilteredCompletedDeliveries] = useState<DailyRecordEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingPending, setRefreshingPending] = useState(false);
+  const [refreshingCompleted, setRefreshingCompleted] = useState(false);
   const [activeTab, setActiveTab] = useState<DeliveryTab>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingProductFilter, setPendingProductFilter] = useState<PendingProductFilter>('all');
@@ -75,6 +78,9 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     loadOrders();
     loadProducts();
     loadCustomers();
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'delivered') {
       loadCompletedDeliveries();
     }
@@ -82,7 +88,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
   useEffect(() => {
     filterOrders();
-  }, [searchQuery, orders, activeTab, pendingProductFilter]);
+  }, [searchQuery, orders, completedDeliveries, customers, activeTab, pendingProductFilter]);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -151,9 +157,9 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     });
   }
 
-  const loadOrders = async () => {
+  const loadOrders = async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!opts?.silent) setLoading(true);
       const result = await getOrders();
       if (Array.isArray(result)) {
         // Sort by orderedAt time in descending order (latest first)
@@ -171,32 +177,38 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       const err = handleServiceError(error, 'loadOrders');
       showError(err.message);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   };
 
+  const getCustomerFullAddress = (customer?: Customer | null) => {
+    const parts = [customer?.doorNumber, customer?.floor, customer?.street, customer?.area].filter(Boolean);
+    return parts.join(', ');
+  };
+
   const filterOrders = () => {
-    let filtered = orders;
+    const q = searchQuery.trim().toLowerCase();
 
-    // Filter by tab (pending = no deliveredAt, delivered = has deliveredAt)
-    // Since delivered orders are deleted, all remaining orders are pending
-    filtered = orders; // All orders in collection are pending
+    // Pending list
+    let pendingFiltered = orders;
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((order) => {
-        return (
-          order.customerName?.toLowerCase().includes(query) ||
-          order.mobile?.includes(query) ||
-          order.address?.toLowerCase().includes(query) ||
-          order.productName?.toLowerCase().includes(query)
-        );
+    if (q) {
+      pendingFiltered = pendingFiltered.filter((order) => {
+        const customer = customers.find((c) => c.id === order.customerId) || null;
+        const address = String(order.address || getCustomerFullAddress(customer) || '').toLowerCase();
+        const mobile = String(order.mobile || customer?.mobile || '');
+        const altContacts = customer?.alternateContacts || [];
+
+        if (String(order.customerName || '').toLowerCase().includes(q)) return true;
+        if (mobile.includes(q)) return true;
+        if (address.includes(q)) return true;
+        if (String(order.productName || '').toLowerCase().includes(q)) return true;
+        if (altContacts.some((c) => String(c || '').includes(q))) return true;
+        return false;
       });
     }
 
-    // Pending product filter (only affects Pending tab)
-    if (activeTab === 'pending' && pendingProductFilter !== 'all') {
+    if (pendingProductFilter !== 'all') {
       const normalizeOrderProduct = (name?: string): PendingProductFilter | '' => {
         const lowerName = (name || '').toLowerCase();
         if (lowerName.includes('20') && lowerName.includes('liter')) return '20L';
@@ -206,10 +218,48 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         return '';
       };
 
-      filtered = filtered.filter((order) => normalizeOrderProduct(order.productName) === pendingProductFilter);
+      pendingFiltered = pendingFiltered.filter((order) => normalizeOrderProduct(order.productName) === pendingProductFilter);
     }
 
-    setFilteredOrders(filtered);
+    setFilteredOrders(pendingFiltered);
+
+    // Completed list
+    let completedFiltered = completedDeliveries;
+    if (q) {
+      completedFiltered = completedFiltered.filter((entry) => {
+        const customer = customers.find((c) => c.id === entry.customerId) || null;
+        const address = String(entry.customerAddress || getCustomerFullAddress(customer) || '').toLowerCase();
+        const mobile = String(entry.customerMobile || customer?.mobile || '');
+        const altContacts = customer?.alternateContacts || [];
+
+        if (String(entry.customerName || '').toLowerCase().includes(q)) return true;
+        if (mobile.includes(q)) return true;
+        if (address.includes(q)) return true;
+        if (String(entry.product || '').toLowerCase().includes(q)) return true;
+        if (altContacts.some((c) => String(c || '').includes(q))) return true;
+        return false;
+      });
+    }
+
+    setFilteredCompletedDeliveries(completedFiltered);
+  };
+
+  const onRefreshPending = async () => {
+    try {
+      setRefreshingPending(true);
+      await Promise.all([loadOrders({ silent: true }), loadProducts(), loadCustomers()]);
+    } finally {
+      setRefreshingPending(false);
+    }
+  };
+
+  const onRefreshCompleted = async () => {
+    try {
+      setRefreshingCompleted(true);
+      await Promise.all([loadCompletedDeliveries({ silent: true }), loadCustomers()]);
+    } finally {
+      setRefreshingCompleted(false);
+    }
   };
 
   const handleCompleteDelivery = async (order: Order) => {
@@ -461,8 +511,9 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     }
   };
 
-  const loadCompletedDeliveries = async () => {
+  const loadCompletedDeliveries = async (opts?: { silent?: boolean }) => {
     try {
+      if (!opts?.silent) setLoading(true);
       const today = getISTDate();
       // Format date as yyyy-MM-dd
       const year = today.getFullYear();
@@ -502,6 +553,9 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       const err = handleServiceError(error, 'loadCompletedDeliveries');
       showError(err.message);
       setCompletedDeliveries([]);
+      setFilteredCompletedDeliveries([]);
+    } finally {
+      if (!opts?.silent) setLoading(false);
     }
   };
 
@@ -710,7 +764,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     </View>
   );
 
-  const renderCompletedCard = ({ item }: { item: DailyRecordEntry }) => (
+  const renderCompletedCard = ({ item }: { item: DailyRecordEntry }) => {
+    const customer = customers.find((c) => c.id === item.customerId) || null;
+    const mobile = item.customerMobile || customer?.mobile || '';
+    const address = item.customerAddress || getCustomerFullAddress(customer) || '';
+
+    return (
     <TouchableOpacity
       style={styles.deliveryCard}
       onPress={() => setSelectedCompletedDelivery(item)}
@@ -720,6 +779,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       <View style={styles.cardHeader}>
         <View style={styles.customerInfo}>
           <Text style={styles.customerName}>{item.customerName}</Text>
+          {mobile ? <Text style={styles.customerMeta}>{mobile}</Text> : null}
+          {address ? <Text style={styles.address}>{address}</Text> : null}
           <Text style={styles.address}>{item.product}</Text>
         </View>
       </View>
@@ -748,7 +809,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
         <Text style={styles.timeText}>{item.deliveredAt}</Text>
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   // Render content based on state
   let content;
@@ -935,7 +997,12 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       {activeTab === 'pending' ? (
         // Pending deliveries
         filteredOrders.length === 0 ? (
-          <View style={styles.emptyContainer}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.emptyContainer, { flexGrow: 1 }]}
+            refreshControl={<RefreshControl refreshing={refreshingPending} onRefresh={onRefreshPending} />}
+            showsVerticalScrollIndicator={false}
+          >
             <MaterialCommunityIcons name="inbox-outline" size={64} color={colors.gray[300]} />
             <Text style={styles.emptyText}>
               {searchQuery ? 'No deliveries found' : 'No pending deliveries'}
@@ -943,7 +1010,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
             {searchQuery && (
               <Text style={styles.emptySubtext}>Try searching with a different keyword</Text>
             )}
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             data={filteredOrders}
@@ -951,25 +1018,32 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
             keyExtractor={(item) => item.id || Math.random().toString()}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={loading} onRefresh={loadOrders} />}
+            refreshControl={<RefreshControl refreshing={refreshingPending} onRefresh={onRefreshPending} />}
           />
         )
       ) : (
         // Delivered/Completed deliveries
-        completedDeliveries.length === 0 ? (
-          <View style={styles.emptyContainer}>
+        filteredCompletedDeliveries.length === 0 ? (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.emptyContainer, { flexGrow: 1 }]}
+            refreshControl={<RefreshControl refreshing={refreshingCompleted} onRefresh={onRefreshCompleted} />}
+            showsVerticalScrollIndicator={false}
+          >
             <MaterialCommunityIcons name="check-circle-outline" size={64} color={colors.gray[300]} />
-            <Text style={styles.emptyText}>We're still waiting for the delivery crew to make their move! 🎯</Text>
-            <Text style={styles.emptySubtext}>No deliveries completed today yet</Text>
-          </View>
+            <Text style={styles.emptyText}>
+              {searchQuery ? 'No deliveries found' : 'No deliveries completed today yet'}
+            </Text>
+            {searchQuery ? <Text style={styles.emptySubtext}>Try searching with a different keyword</Text> : null}
+          </ScrollView>
         ) : (
           <FlatList
-            data={completedDeliveries}
+            data={filteredCompletedDeliveries}
             renderItem={renderCompletedCard}
             keyExtractor={(_, index) => `completed-${index}`}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={loading} onRefresh={loadCompletedDeliveries} />}
+            refreshControl={<RefreshControl refreshing={refreshingCompleted} onRefresh={onRefreshCompleted} />}
           />
         )
       )}
@@ -1477,6 +1551,11 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray[600],
     lineHeight: 18,
+  },
+  customerMeta: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
   },
   productActionRow: {
     flexDirection: 'row',
