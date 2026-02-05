@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { updateStock, Stock } from '../services/stockService';
@@ -185,7 +186,7 @@ export default function EditStockScreen({
             placeholderTextColor={colors.gray[400]}
             value={editQuantity}
             onChangeText={setEditQuantity}
-            keyboardType="number-pad"
+            keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             editable={!submitting}
           />
           <Text style={styles.fieldHint}>Current: {stock.quantity || 0} units</Text>
@@ -205,7 +206,7 @@ export default function EditStockScreen({
             placeholderTextColor={colors.gray[400]}
             value={editPrice}
             onChangeText={setEditPrice}
-            keyboardType="number-pad"
+            keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             editable={userRole === 'owner' && !submitting}
           />
           <Text style={styles.fieldHint}>Current: ₹{(stock as any).price || 0} per unit</Text>
@@ -226,7 +227,7 @@ export default function EditStockScreen({
               placeholderTextColor={colors.gray[400]}
               value={editEmpty}
               onChangeText={setEditEmpty}
-              keyboardType="number-pad"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
               editable={userRole === 'owner' && !submitting}
             />
             <Text style={styles.fieldHint}>Current: {stock.empty || 0} units</Text>
@@ -248,7 +249,7 @@ export default function EditStockScreen({
               placeholderTextColor={colors.gray[400]}
               value={editExtraCan}
               onChangeText={setEditExtraCan}
-              keyboardType="number-pad"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
               editable={userRole === 'owner' && !submitting}
             />
             <Text style={styles.fieldHint}>Current: {stock.extraCan || 0} units</Text>
@@ -270,7 +271,7 @@ export default function EditStockScreen({
               placeholderTextColor={colors.gray[400]}
               value={editTotal}
               onChangeText={setEditTotal}
-              keyboardType="number-pad"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
               editable={userRole === 'owner' && !submitting}
             />
             <Text style={styles.fieldHint}>Current: {stock.total || 0} units</Text>

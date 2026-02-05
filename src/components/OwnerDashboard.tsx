@@ -24,6 +24,7 @@ import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
+import PartyOrdersScreen from './PartyOrdersScreen';
 import DeliveriesScreen from './DeliveriesScreen';
 import StockScreen from './StockScreen';
 import ExpenseScreen from './ExpenseScreen';
@@ -121,6 +122,7 @@ export default function OwnerDashboard() {
 
       if (
         currentScreen === 'customers' ||
+        currentScreen === 'partyOrders' ||
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
@@ -322,6 +324,14 @@ export default function OwnerDashboard() {
     <View style={{ gap: 12 }}>
       <TouchableOpacity
         style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+        onPress={() => handleNavigate('partyOrders')}
+      >
+        <MaterialCommunityIcons name="account-group-outline" size={20} color="#0ea5e9" />
+        <Text style={{ color: '#0ea5e9', fontWeight: '700' }}>Party Orders</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
         onPress={() => handleNavigate('counterSale')}
       >
         <MaterialCommunityIcons name="cart-outline" size={20} color="#0ea5e9" />
@@ -399,6 +409,8 @@ export default function OwnerDashboard() {
       >
         {currentScreen === 'customers' ? (
           <CustomersListScreen allowCustomerDelete={true} />
+        ) : currentScreen === 'partyOrders' ? (
+          <PartyOrdersScreen allowCustomerDelete={true} userRole="owner" isAdmin={true} />
         ) : currentScreen === 'profile' ? (
           <UserProfileScreen
             allowEdit={true}
@@ -558,22 +570,6 @@ export default function OwnerDashboard() {
           </View>
           <View style={styles.statsGrid}>
             <View style={styles.statsRow}>
-              <StatCard icon="playlist-check" label="Pending deliveries" value={stats.pendingDeliveries} />
-              <StatCard icon="truck-delivery" label="Delivered today" value={stats.deliveredToday} />
-            </View>
-            <View style={styles.statsRow}>
-              <StatCard icon="bottle-soda" label="Delivered cans" value={stats.deliveredCans} />
-              <StatCard icon="bottle-wine" label="Empty collected" value={stats.emptyCollected} />
-            </View>
-          </View>
-
-          <Text style={styles.sectionLabel}>Sales & Cash</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard icon="cash-plus" label="Cash payments" value={currencyINR(stats.cashPayment)} />
-              <StatCard icon="credit-card" label="Online payments" value={currencyINR(stats.onlinePayment)} />
-            </View>
-            <View style={styles.statsRow}>
               <StatCard icon="cash" label="Sale" value={currencyINR(stats.sale)} bgColor="#f0fdf4" />
               <StatCard icon="hand-coin" label="Pending received" value={currencyINR(stats.pendingPaymentsReceived)} bgColor="#f5f3ff" />
             </View>
@@ -682,5 +678,14 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginTop: 4,
     marginBottom: 0,
+  },
+  drawerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
   },
 });

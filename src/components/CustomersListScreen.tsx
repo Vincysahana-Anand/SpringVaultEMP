@@ -244,6 +244,8 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
   const handleOpenOrderModal = (customer: Customer, event: any) => {
     event.stopPropagation();
     setOrderCustomer(customer);
+    // Ensure modal inputs remain editable even if a previous submit failed
+    setSubmittingOrder(false);
     
     // Set default product based on customer type
     const isResidence = customer.customerType?.toLowerCase() === 'residence';
@@ -373,9 +375,9 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
       showError('An unexpected error occurred. Please try again.');
       setSubmittingOrder(false);
     } finally {
-      if (submittingOrder) {
-        setSubmittingOrder(false);
-      }
+      // Always clear submitting state; relying on the captured `submittingOrder`
+      // value here can leave it stuck `true` and prevent the soft keyboard.
+      setSubmittingOrder(false);
     }
   };
 
@@ -587,7 +589,7 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
                     placeholderTextColor={colors.gray[400]}
                     value={orderQuantity}
                     onChangeText={setOrderQuantity}
-                    keyboardType="number-pad"
+                    keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                     editable={!submittingOrder}
                   />
                 </View>

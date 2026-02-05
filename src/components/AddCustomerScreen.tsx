@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, BackHandler, Platform } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { addCustomer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
@@ -191,18 +191,18 @@ export default function AddCustomerScreen({ onBack }: Props) {
       <View style={styles.row}>
         <View style={[styles.fieldGroup, { flex: 1 }]}> 
           <Text style={styles.label}>Can Holding</Text>
-          <TextInput style={styles.input} value={canHolding} onChangeText={setCanHolding} placeholder="0" keyboardType="number-pad" />
+          <TextInput style={styles.input} value={canHolding} onChangeText={setCanHolding} placeholder="0" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
         </View>
         <View style={{ width: 12 }} />
         <View style={[styles.fieldGroup, { flex: 1 }]}> 
           <Text style={styles.label}>Advance Amount</Text>
-          <TextInput style={styles.input} value={advanceAmount} onChangeText={setAdvanceAmount} placeholder="0" keyboardType="number-pad" />
+          <TextInput style={styles.input} value={advanceAmount} onChangeText={setAdvanceAmount} placeholder="0" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
         </View>
       </View>
 
       <View style={styles.fieldGroup}> 
         <Text style={styles.label}>Price</Text>
-        <TextInput style={styles.input} value={price} onChangeText={setPrice} placeholder="₹" keyboardType="number-pad" />
+        <TextInput style={styles.input} value={price} onChangeText={setPrice} placeholder="₹" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
       </View>
 
       {customerType === 'Shop' || customerType === 'Party' ? (
@@ -214,7 +214,7 @@ export default function AddCustomerScreen({ onBack }: Props) {
               value={oneLPrice}
               onChangeText={setOneLPrice}
               placeholder="₹"
-              keyboardType="number-pad"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             />
           </View>
 
@@ -225,7 +225,7 @@ export default function AddCustomerScreen({ onBack }: Props) {
               value={fiveHundredMlPrice}
               onChangeText={setFiveHundredMlPrice}
               placeholder="₹"
-              keyboardType="number-pad"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             />
           </View>
 
@@ -236,7 +236,7 @@ export default function AddCustomerScreen({ onBack }: Props) {
               value={threeHundredMlPrice}
               onChangeText={setThreeHundredMlPrice}
               placeholder="₹"
-              keyboardType="number-pad"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             />
           </View>
         </>

@@ -12,6 +12,7 @@ export interface Order {
   paymentMethod: string;
   amountPaid?: number;
   orderedAt?: string;
+  requestedDate?: string;
   deliveredAt?: string;
   address?: string;
   mobile?: string;

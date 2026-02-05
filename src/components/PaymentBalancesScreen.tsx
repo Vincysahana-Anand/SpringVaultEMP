@@ -1044,7 +1044,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
                 <Text style={styles.fieldLabel}>Amount</Text>
                 <TextInput
                   style={styles.fieldInput}
-                  keyboardType="number-pad"
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                   value={payAmount}
                   onChangeText={setPayAmount}
                   placeholder="0"
@@ -1059,7 +1059,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
                     value={payRef}
                     onChangeText={(text) => setPayRef(text.replace(/[^0-9]/g, ''))}
                     placeholder="Enter reference"
-                    keyboardType="number-pad"
+                    keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                   />
                 </View>
               ) : null}

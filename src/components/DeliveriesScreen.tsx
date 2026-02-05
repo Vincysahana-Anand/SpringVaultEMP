@@ -1098,7 +1098,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                         placeholderTextColor={colors.gray[400]}
                         value={fullBottlesDelivered}
                         onChangeText={setFullBottlesDelivered}
-                        keyboardType="number-pad"
+                        keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                         editable={!submitting}
                       />
                     </View>
@@ -1125,7 +1125,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                               setEmptyBottlesCollected('0');
                             }
                           }}
-                          keyboardType="number-pad"
+                          keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                           editable={!submitting}
                         />
                       </View>
@@ -1180,7 +1180,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                             setAmountPaid('0');
                           }
                         }}
-                        keyboardType="number-pad"
+                        keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                         editable={!submitting}
                       />
                     </View>
@@ -1196,7 +1196,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                           value={paymentRef}
                           onChangeText={(text) => setPaymentRef(text.replace(/[^0-9]/g, ''))}
                           editable={!submitting}
-                          keyboardType="number-pad"
+                          keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                         />
                       </View>
                     )}
@@ -1311,7 +1311,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
                         placeholderTextColor={colors.gray[400]}
                         value={editQuantity}
                         onChangeText={setEditQuantity}
-                        keyboardType="number-pad"
+                        keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                         editable={!submittingEdit}
                       />
                     </View>

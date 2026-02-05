@@ -681,7 +681,7 @@ export default function ReportsScreen({ onBack }: Props) {
                   onChangeText={setMonthYear}
                   placeholder="2026"
                   placeholderTextColor={colors.gray[400]}
-                  keyboardType="number-pad"
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                   style={styles.yearInput}
                   maxLength={4}
                 />
@@ -725,7 +725,7 @@ export default function ReportsScreen({ onBack }: Props) {
                 onChangeText={setYear}
                 placeholder="2026"
                 placeholderTextColor={colors.gray[400]}
-                keyboardType="number-pad"
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                 style={styles.yearInput}
                 maxLength={4}
               />

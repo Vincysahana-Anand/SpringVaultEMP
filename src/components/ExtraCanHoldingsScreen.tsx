@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers, Customer } from '../services/customerService';
@@ -370,7 +371,7 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
                   style={styles.modalInput}
                   placeholder="Enter count"
                   placeholderTextColor="#94a3b8"
-                  keyboardType="number-pad"
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
                   value={returnQty}
                   onChangeText={(text) => setReturnQty(text.replace(/[^0-9]/g, ''))}
                 />

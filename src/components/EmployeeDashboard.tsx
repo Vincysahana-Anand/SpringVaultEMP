@@ -43,6 +43,7 @@ import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
 import ReportsScreen from './ReportsScreen';
 import UserProfileScreen from './UserProfileScreen';
+import PartyOrdersScreen from './PartyOrdersScreen';
 
 const logo = require('../assets/banner.png');
 
@@ -117,6 +118,7 @@ export default function EmployeeDashboard() {
 
       if (
         currentScreen === 'customers' ||
+        currentScreen === 'partyOrders' ||
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
@@ -324,6 +326,14 @@ export default function EmployeeDashboard() {
       <View style={{ gap: 12 }}>
         <TouchableOpacity
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+          onPress={() => handleNavigate('partyOrders')}
+        >
+          <MaterialCommunityIcons name="account-group-outline" size={20} color="#0ea5e9" />
+          <Text style={{ color: '#0ea5e9', fontWeight: '700' }}>Party Orders</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
           onPress={() => handleNavigate('counterSale')}
         >
           <MaterialCommunityIcons name="cart-outline" size={20} color="#0ea5e9" />
@@ -401,6 +411,8 @@ export default function EmployeeDashboard() {
         >
           {currentScreen === 'customers' ? (
             <CustomersListScreen allowCustomerDelete={false} />
+          ) : currentScreen === 'partyOrders' ? (
+            <PartyOrdersScreen allowCustomerDelete={false} userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'profile' ? (
             <UserProfileScreen
               allowEdit={isAdmin}
@@ -597,6 +609,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     columnGap: 12,
     marginBottom: 14,
+  },
+  drawerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
   },
   welcome: {
     fontSize: 20,
