@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   View,
@@ -24,6 +24,7 @@ import { getStocks, Stock } from '../services/stockService';
 import {
   addPartyDelivery,
   addPartyOrder,
+  completePartyDeliveryTransaction,
   deletePartyOrder,
   getPartyDeliveries,
   getPartyOrders,
@@ -54,6 +55,10 @@ interface Customer {
   canHolding?: number;
   extraCanHolding?: number;
   balance?: number;
+  price?: number;
+  '1lPrice'?: number;
+  '500mlPrice'?: number;
+  '300mlPrice'?: number;
   customerType?: string;
 }
 
@@ -94,6 +99,11 @@ export default function PartyOrdersScreen({
   const [showRequestedDatePicker, setShowRequestedDatePicker] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [submittingDeliveryOrderId, setSubmittingDeliveryOrderId] = useState<string | null>(null);
+  const [showPartyDeliveryModal, setShowPartyDeliveryModal] = useState(false);
+  const [deliveringPartyOrder, setDeliveringPartyOrder] = useState<PartyOrder | null>(null);
+  const [deliveryQtyInput, setDeliveryQtyInput] = useState('');
+  const [submittingPartyDelivery, setSubmittingPartyDelivery] = useState(false);
+  const quantityUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deletingPartyOrderId, setDeletingPartyOrderId] = useState<string | null>(null);
   const [showEditPartyOrderModal, setShowEditPartyOrderModal] = useState(false);
   const [editingPartyOrder, setEditingPartyOrder] = useState<PartyOrder | null>(null);
@@ -128,6 +138,37 @@ export default function PartyOrdersScreen({
     const phone = String(mobile || '').trim();
     if (!phone) return;
     Linking.openURL(`tel:${phone}`);
+  };
+
+  const getCustomerUnitPriceForOrder = (order: PartyOrder, customer: Customer | null): number => {
+    const stock = products.find((p) => p.id === order.productId);
+    const stockUnitPrice = Number(stock?.price ?? 0) || 0;
+    if (!customer) return stockUnitPrice;
+
+    const customerPrice = Number((customer as any)?.price ?? 0) || 0;
+    const customer1LPrice = Number((customer as any)?.['1lPrice'] ?? 0) || 0;
+    const customer500mlPrice = Number((customer as any)?.['500mlPrice'] ?? 0) || 0;
+    const customer300mlPrice = Number((customer as any)?.['300mlPrice'] ?? 0) || 0;
+
+    switch (String(order.productId || '')) {
+      case '20L_PARTY_CAN':
+        return customerPrice > 0 ? customerPrice : stockUnitPrice;
+      case '1L_CASE':
+        return customer1LPrice > 0 ? customer1LPrice : stockUnitPrice;
+      case '500ML_CASE':
+        return customer500mlPrice > 0 ? customer500mlPrice : stockUnitPrice;
+      case '300ML_CASE':
+        return customer300mlPrice > 0 ? customer300mlPrice : stockUnitPrice;
+      default: {
+        // Backward compatibility for any legacy IDs/names.
+        const normalizedName = String(order.productName || '')
+          .toLowerCase()
+          .replace(/\s+/g, '');
+        const is20LPartyCanByName = normalizedName.includes('20l') && (normalizedName.includes('-p') || normalizedName.includes('party') || normalizedName.endsWith('p'));
+        if (is20LPartyCanByName && customerPrice > 0) return customerPrice;
+        return stockUnitPrice;
+      }
+    }
   };
 
   useEffect(() => {
@@ -383,6 +424,113 @@ export default function PartyOrdersScreen({
     setSubmittingOrder(false);
   };
 
+  const handleOpenPartyDeliveryModal = (order: PartyOrder) => {
+    if (!order.id) {
+      showError('Order not found. Please refresh and try again.');
+      return;
+    }
+    setDeliveringPartyOrder(order);
+    setDeliveryQtyInput(String(order.quantity ?? ''));
+    setShowPartyDeliveryModal(true);
+  };
+
+  const handleClosePartyDeliveryModal = () => {
+    setShowPartyDeliveryModal(false);
+    setDeliveringPartyOrder(null);
+    setDeliveryQtyInput('');
+    setSubmittingPartyDelivery(false);
+    if (quantityUpdateTimerRef.current) {
+      clearTimeout(quantityUpdateTimerRef.current);
+      quantityUpdateTimerRef.current = null;
+    }
+  };
+
+  const schedulePartyOrderQuantityUpdate = (order: PartyOrder, nextQty: number) => {
+    if (!order?.id) return;
+    if (!Number.isFinite(nextQty) || nextQty <= 0) return;
+
+    if (quantityUpdateTimerRef.current) {
+      clearTimeout(quantityUpdateTimerRef.current);
+      quantityUpdateTimerRef.current = null;
+    }
+
+    quantityUpdateTimerRef.current = setTimeout(async () => {
+      try {
+        if (nextQty === (Number(order.quantity) || 0)) return;
+
+        const result = await updatePartyOrder(order.id as string, { quantity: nextQty });
+        if (result !== true) {
+          const err = handleServiceError(result, 'updatePartyOrder');
+          showError(err.message);
+          return;
+        }
+
+        setPartyOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, quantity: nextQty } : o)));
+        setFilteredPartyOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, quantity: nextQty } : o)));
+        setDeliveringPartyOrder((prev) => {
+          if (!prev) return prev;
+          if (prev.id !== order.id) return prev;
+          return { ...prev, quantity: nextQty };
+        });
+      } catch (e) {
+        const err = handleServiceError(e, 'updatePartyOrder');
+        showError(err.message);
+      }
+    }, 450);
+  };
+
+  const handleSubmitPartyDelivery = async () => {
+    if (!deliveringPartyOrder?.id) return;
+
+    const qty = parseInt(deliveryQtyInput || '0', 10) || 0;
+    if (qty <= 0) {
+      showError('Please enter valid quantity');
+      return;
+    }
+
+    try {
+      setSubmittingPartyDelivery(true);
+
+      const result = await completePartyDeliveryTransaction({ order: deliveringPartyOrder, deliveredQty: qty });
+      if (!('ok' in result) || result.ok !== true) {
+        const err = handleServiceError(result, 'completePartyDeliveryTransaction');
+        showError(err.message);
+        return;
+      }
+
+      // Refresh local UI: remove from Orders, add to History.
+      setPartyOrders((prev) => prev.filter((o) => o.id !== deliveringPartyOrder.id));
+      setFilteredPartyOrders((prev) => prev.filter((o) => o.id !== deliveringPartyOrder.id));
+
+      const newDelivery: PartyDelivery = {
+        customerId: deliveringPartyOrder.customerId,
+        customerName: deliveringPartyOrder.customerName,
+        mobile: deliveringPartyOrder.mobile,
+        address: deliveringPartyOrder.address,
+        productId: deliveringPartyOrder.productId,
+        productName: deliveringPartyOrder.productName,
+        quantity: deliveringPartyOrder.quantity,
+        deliveredQty: qty,
+        deliveredAt: result.deliveredAt,
+        requestedDate: deliveringPartyOrder.requestedDate,
+        paymentMethod: deliveringPartyOrder.paymentMethod,
+        amountPaid: 0,
+        timeStamp: getISTDate(),
+      };
+
+      setPartyDeliveries((prev) => [newDelivery, ...prev]);
+      setFilteredPartyDeliveries((prev) => [newDelivery, ...prev]);
+
+      showSuccess('Delivered successfully');
+      handleClosePartyDeliveryModal();
+    } catch (e) {
+      const err = handleServiceError(e, 'completePartyDeliveryTransaction');
+      showError(err.message);
+    } finally {
+      setSubmittingPartyDelivery(false);
+    }
+  };
+
   const canEditOrDeleteOrders = userRole === 'owner' || (userRole === 'employee' && isAdmin);
 
   const handleDeletePartyOrder = (order: PartyOrder) => {
@@ -631,82 +779,10 @@ export default function PartyOrdersScreen({
           <TouchableOpacity
             style={styles.partyOrderActionIcon}
             activeOpacity={0.7}
-            disabled={!item.id || submittingDeliveryOrderId === item.id || deletingPartyOrderId === item.id || submittingEditPartyOrder}
-            onPress={() => {
-              if (!item.id) {
-                showError('Order not found. Please refresh and try again.');
-                return;
-              }
-
-              Alert.alert('Mark as delivered?', 'This will move the order to History.', [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Deliver',
-                  onPress: async () => {
-                    try {
-                      setSubmittingDeliveryOrderId(item.id as string);
-
-                      const now = getISTDate();
-                      const deliveredAt = now.toLocaleString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true,
-                      });
-
-                      const deliveryData: PartyDelivery = {
-                        customerId: item.customerId,
-                        customerName: item.customerName,
-                        mobile: item.mobile,
-                        address: item.address,
-                        productId: item.productId,
-                        productName: item.productName,
-                        quantity: item.quantity,
-                        deliveredQty: item.quantity,
-                        deliveredAt,
-                        requestedDate: item.requestedDate,
-                        paymentMethod: item.paymentMethod,
-                        timeStamp: now,
-                      };
-
-                      const addResult = await addPartyDelivery(deliveryData);
-                      if (addResult !== true) {
-                        const err = handleServiceError(addResult, 'addPartyDelivery');
-                        showError(err.message);
-                        return;
-                      }
-
-                      const delResult = await deletePartyOrder(item.id as string);
-                      if (delResult !== true) {
-                        const err = handleServiceError(delResult, 'deletePartyOrder');
-                        showError(err.message);
-                        return;
-                      }
-
-                      setPartyOrders((prev) => prev.filter((o) => o.id !== item.id));
-                      setFilteredPartyOrders((prev) => prev.filter((o) => o.id !== item.id));
-                      setPartyDeliveries((prev) => [deliveryData, ...prev]);
-                      setFilteredPartyDeliveries((prev) => [deliveryData, ...prev]);
-
-                      showSuccess('Delivered successfully');
-                    } catch (e) {
-                      const err = handleServiceError(e, 'deliverPartyOrder');
-                      showError(err.message);
-                    } finally {
-                      setSubmittingDeliveryOrderId(null);
-                    }
-                  },
-                },
-              ]);
-            }}
+            disabled={!item.id || submittingPartyDelivery || deletingPartyOrderId === item.id || submittingEditPartyOrder}
+            onPress={() => handleOpenPartyDeliveryModal(item)}
           >
-            {submittingDeliveryOrderId === item.id ? (
-              <ActivityIndicator size="small" color={colors.success[500]} />
-            ) : (
-              <MaterialCommunityIcons name="truck-delivery" size={18} color={colors.success[500]} />
-            )}
+            <MaterialCommunityIcons name="truck-delivery" size={18} color={colors.success[500]} />
           </TouchableOpacity>
 
           {canEditOrDeleteOrders ? (
@@ -1114,6 +1190,104 @@ export default function PartyOrdersScreen({
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={showPartyDeliveryModal} transparent animationType="fade" onRequestClose={handleClosePartyDeliveryModal}>
+        <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <Pressable style={styles.modalOverlay} onPress={handleClosePartyDeliveryModal}>
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Deliver Order</Text>
+                <TouchableOpacity onPress={handleClosePartyDeliveryModal} style={styles.modalCloseButton}>
+                  <MaterialCommunityIcons name="close" size={24} color={colors.gray[600]} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {deliveringPartyOrder ? (
+                  <>
+                    <View style={styles.customerInfoSection}>
+                      <Text style={styles.customerNameModal}>{deliveringPartyOrder.customerName}</Text>
+                      <Text style={styles.customerAddressModal}>{formatProductName(String(deliveringPartyOrder.productName || ''))}</Text>
+
+                      {(() => {
+                        const customer = customers.find((c) => c.id === deliveringPartyOrder.customerId);
+                        if (!customer) return null;
+                        return (
+                          <View style={[styles.customerStats, { marginTop: spacing[8] }]}>
+                            <View style={styles.statItem}>
+                              <MaterialCommunityIcons name="wallet" size={16} color={colors.success[500]} />
+                              <Text style={styles.statLabel}>Balance: {currencyINR(customer.balance || 0)}</Text>
+                            </View>
+                          </View>
+                        );
+                      })()}
+                    </View>
+
+                    <View style={styles.formGroup}>
+                      <Text style={styles.modalLabel}>Quantity *</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Enter quantity"
+                        placeholderTextColor={colors.gray[400]}
+                        value={deliveryQtyInput}
+                        onChangeText={(t) => {
+                          const cleaned = (t || '').replace(/[^0-9]/g, '');
+                          setDeliveryQtyInput(cleaned);
+                          const nextQty = parseInt(cleaned || '0', 10) || 0;
+                          if (nextQty > 0) {
+                            // Requirement: if qty changed, update party order quantity.
+                            schedulePartyOrderQuantityUpdate(deliveringPartyOrder, nextQty);
+                          }
+                        }}
+                        keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                        editable={!submittingPartyDelivery}
+                      />
+                    </View>
+
+                    {(() => {
+                      const customer = customers.find((c) => c.id === deliveringPartyOrder.customerId);
+                      if (!customer) return null;
+
+                      const customerBalance = Number(customer.balance ?? 0) || 0;
+                      const qtyForBill = parseInt(deliveryQtyInput || '0', 10) || 0;
+
+                      const unitPrice = getCustomerUnitPriceForOrder(deliveringPartyOrder, customer);
+
+                      const billAmount = customerBalance + unitPrice * qtyForBill;
+
+                      return (
+                        <View style={styles.billAmountRow}>
+                          <Text style={styles.billAmountLabel}>Bill Amount</Text>
+                          <Text style={styles.billAmountValue}>
+                            Rs {qtyForBill > 0 ? billAmount : customerBalance}
+                          </Text>
+                        </View>
+                      );
+                    })()}
+
+                    <TouchableOpacity
+                      style={[styles.submitButton, submittingPartyDelivery && styles.submitButtonDisabled]}
+                      onPress={handleSubmitPartyDelivery}
+                      disabled={submittingPartyDelivery}
+                    >
+                      {submittingPartyDelivery ? (
+                        <ActivityIndicator color={colors.bg.white} size="small" />
+                      ) : (
+                        <Text style={styles.submitButtonText}>Submit</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : null}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1505,6 +1679,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[12],
     fontSize: typography.fontSize.base,
     color: colors.gray[800],
+  },
+  billAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[12],
+    marginTop: -spacing[4],
+  },
+  billAmountLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[700],
+  },
+  billAmountValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
   },
   dateFieldButton: {
     flexDirection: 'row',
