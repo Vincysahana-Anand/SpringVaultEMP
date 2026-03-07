@@ -39,28 +39,9 @@ import { colors, spacing, typography, borderRadius, elevation } from '../shared/
 import { showError, showSuccess } from '../shared/feedback/messageBus';
 import DropletLoader from './DropletLoader';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
+import { Customer } from '../services/customerService';
 import EditCustomerScreen from './EditCustomerScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
-
-interface Customer {
-  id: string;
-  name: string;
-  mobile: string;
-  doorNumber?: string;
-  floor?: string;
-  street?: string;
-  area?: string;
-  alternateContacts?: string[];
-  advanceAmount?: number;
-  canHolding?: number;
-  extraCanHolding?: number;
-  balance?: number;
-  price?: number;
-  '1lPrice'?: number;
-  '500mlPrice'?: number;
-  '300mlPrice'?: number;
-  customerType?: string;
-}
 
 interface PartyOrdersScreenProps {
   allowCustomerDelete?: boolean;
@@ -88,6 +69,7 @@ export default function PartyOrdersScreen({
   const [loadingDeliveries, setLoadingDeliveries] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showOrderPage, setShowOrderPage] = useState(false);
   const [orderCustomer, setOrderCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Stock[]>([]);
   const [productQuantities, setProductQuantities] = useState<Record<string, string>>({});
@@ -100,12 +82,14 @@ export default function PartyOrdersScreen({
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [submittingDeliveryOrderId, setSubmittingDeliveryOrderId] = useState<string | null>(null);
   const [showPartyDeliveryModal, setShowPartyDeliveryModal] = useState(false);
+  const [showPartyDeliveryPage, setShowPartyDeliveryPage] = useState(false);
   const [deliveringPartyOrder, setDeliveringPartyOrder] = useState<PartyOrder | null>(null);
   const [deliveryQtyInput, setDeliveryQtyInput] = useState('');
   const [submittingPartyDelivery, setSubmittingPartyDelivery] = useState(false);
   const quantityUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deletingPartyOrderId, setDeletingPartyOrderId] = useState<string | null>(null);
   const [showEditPartyOrderModal, setShowEditPartyOrderModal] = useState(false);
+  const [showEditPartyOrderPage, setShowEditPartyOrderPage] = useState(false);
   const [editingPartyOrder, setEditingPartyOrder] = useState<PartyOrder | null>(null);
   const [editPartyOrderQty, setEditPartyOrderQty] = useState('1');
   const [editRequestedDate, setEditRequestedDate] = useState<Date>(() => {
@@ -178,6 +162,22 @@ export default function PartyOrdersScreen({
 
   useEffect(() => {
     const handleBackPress = () => {
+      if (showEditPartyOrderPage || showEditPartyOrderModal) {
+        handleCloseEditPartyOrder();
+        return true;
+      }
+      if (showPartyDeliveryPage || showPartyDeliveryModal) {
+        handleClosePartyDeliveryModal();
+        return true;
+      }
+      if (showOrderPage || showOrderModal) {
+        handleCloseOrderModal();
+        return true;
+      }
+      if (historyCustomer) {
+        setHistoryCustomer(null);
+        return true;
+      }
       if (selectedCustomer) {
         setSelectedCustomer(null);
         return true;
@@ -187,7 +187,16 @@ export default function PartyOrdersScreen({
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => backHandler.remove();
-  }, []);
+  }, [
+    historyCustomer,
+    selectedCustomer,
+    showEditPartyOrderModal,
+    showEditPartyOrderPage,
+    showOrderModal,
+    showOrderPage,
+    showPartyDeliveryModal,
+    showPartyDeliveryPage,
+  ]);
 
   useEffect(() => {
     if (activeBadge === 'customers') {
@@ -413,11 +422,18 @@ export default function PartyOrdersScreen({
     today.setHours(0, 0, 0, 0);
     setRequestedDate(today);
     setShowRequestedDatePicker(false);
-    setShowOrderModal(true);
+    if (userRole === 'employee' && !isAdmin) {
+      setShowOrderPage(true);
+      setShowOrderModal(false);
+    } else {
+      setShowOrderModal(true);
+      setShowOrderPage(false);
+    }
   };
 
   const handleCloseOrderModal = () => {
     setShowOrderModal(false);
+    setShowOrderPage(false);
     setOrderCustomer(null);
     setProductQuantities({});
     setShowRequestedDatePicker(false);
@@ -431,11 +447,18 @@ export default function PartyOrdersScreen({
     }
     setDeliveringPartyOrder(order);
     setDeliveryQtyInput(String(order.quantity ?? ''));
-    setShowPartyDeliveryModal(true);
+    if (userRole === 'employee' && !isAdmin) {
+      setShowPartyDeliveryPage(true);
+      setShowPartyDeliveryModal(false);
+    } else {
+      setShowPartyDeliveryModal(true);
+      setShowPartyDeliveryPage(false);
+    }
   };
 
   const handleClosePartyDeliveryModal = () => {
     setShowPartyDeliveryModal(false);
+    setShowPartyDeliveryPage(false);
     setDeliveringPartyOrder(null);
     setDeliveryQtyInput('');
     setSubmittingPartyDelivery(false);
@@ -594,11 +617,18 @@ export default function PartyOrdersScreen({
       return today;
     })());
     setShowEditRequestedDatePicker(false);
-    setShowEditPartyOrderModal(true);
+    if (userRole === 'employee' && !isAdmin) {
+      setShowEditPartyOrderPage(true);
+      setShowEditPartyOrderModal(false);
+    } else {
+      setShowEditPartyOrderModal(true);
+      setShowEditPartyOrderPage(false);
+    }
   };
 
   const handleCloseEditPartyOrder = () => {
     setShowEditPartyOrderModal(false);
+    setShowEditPartyOrderPage(false);
     setEditingPartyOrder(null);
     setEditPartyOrderQty('1');
     setShowEditRequestedDatePicker(false);
@@ -686,7 +716,8 @@ export default function PartyOrdersScreen({
           timeStamp: now,
         };
 
-        const result = await addPartyOrder(orderData);
+        orderData.customerId = orderData.customerId || '';
+      const result = await addPartyOrder(orderData as any);
         if (result !== true) {
           const err = handleServiceError(result, 'addPartyOrder');
           showError(err.message);
@@ -846,6 +877,318 @@ export default function PartyOrdersScreen({
     </View>
   );
 
+  if (showOrderPage && orderCustomer) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.pageHeader}>
+          <TouchableOpacity onPress={handleCloseOrderModal} style={styles.pageBackBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.pageHeaderTitle}>Add Order</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView
+          style={styles.pageContent}
+          contentContainerStyle={{ paddingBottom: spacing[24] }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.customerInfoSection}>
+                <Text style={styles.customerNameModal}>{orderCustomer.name}</Text>
+                <Text style={styles.customerAddressModal}>{getFullAddress(orderCustomer)}</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.modalLabel}>Requested Date *</Text>
+                <TouchableOpacity
+                  style={styles.dateFieldButton}
+                  onPress={() => setShowRequestedDatePicker(true)}
+                  disabled={submittingOrder}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons name="calendar" size={18} color={colors.gray[500]} />
+                  <Text style={styles.dateFieldText}>
+                    {requestedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </TouchableOpacity>
+
+                {showRequestedDatePicker ? (
+                  <DateTimePicker
+                    value={requestedDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, selected) => {
+                      if (Platform.OS !== 'ios') {
+                        setShowRequestedDatePicker(false);
+                      }
+                      if (selected) {
+                        const picked = new Date(selected);
+                        picked.setHours(0, 0, 0, 0);
+                        setRequestedDate(picked);
+                      }
+                    }}
+                  />
+                ) : null}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.modalLabel}>Products *</Text>
+                {loadingProducts ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={colors.primary[500]} />
+                    <Text style={styles.loadingText}>Loading products...</Text>
+                  </View>
+                ) : products.length === 0 ? (
+                  <Text style={styles.noProductsText}>No products available</Text>
+                ) : (
+                  <View style={styles.multiProductList}>
+                    {getFilteredProducts().map((product) => {
+                      const value = productQuantities[product.id] ?? '';
+                      return (
+                        <View key={product.id} style={styles.multiProductRow}>
+                          <View style={styles.productBadge}>
+                            <Text style={styles.productBadgeText}>{formatProductName(product.productName)}</Text>
+                          </View>
+                          <TextInput
+                            style={styles.qtyInput}
+                            placeholder="0"
+                            placeholderTextColor={colors.gray[400]}
+                            value={value}
+                            onChangeText={(t) => {
+                              const cleaned = (t || '').replace(/[^0-9]/g, '');
+                              setProductQuantities((prev) => ({ ...prev, [product.id]: cleaned }));
+                            }}
+                            keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                            editable={!submittingOrder}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submitButton, submittingOrder && styles.submitButtonDisabled]}
+                onPress={handleSubmitOrder}
+                disabled={submittingOrder}
+              >
+                {submittingOrder ? (
+                  <ActivityIndicator color={colors.bg.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (showEditPartyOrderPage && editingPartyOrder) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.pageHeader}>
+          <TouchableOpacity onPress={handleCloseEditPartyOrder} style={styles.pageBackBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.pageHeaderTitle}>Edit Order</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView
+          style={styles.pageContent}
+          contentContainerStyle={{ paddingBottom: spacing[24] }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.customerInfoSection}>
+                <Text style={styles.customerNameModal}>{editingPartyOrder.customerName}</Text>
+                <Text style={styles.customerAddressModal}>{formatProductName(String(editingPartyOrder.productName || ''))}</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.modalLabel}>Requested Date *</Text>
+                <TouchableOpacity
+                  style={styles.dateFieldButton}
+                  onPress={() => setShowEditRequestedDatePicker(true)}
+                  disabled={submittingEditPartyOrder}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons name="calendar" size={18} color={colors.gray[500]} />
+                  <Text style={styles.dateFieldText}>
+                    {editRequestedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </TouchableOpacity>
+
+                {showEditRequestedDatePicker ? (
+                  <DateTimePicker
+                    value={editRequestedDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, selected) => {
+                      if (Platform.OS !== 'ios') {
+                        setShowEditRequestedDatePicker(false);
+                      }
+                      if (selected) {
+                        const picked = new Date(selected);
+                        picked.setHours(0, 0, 0, 0);
+                        setEditRequestedDate(picked);
+                      }
+                    }}
+                  />
+                ) : null}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.modalLabel}>Quantity *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Enter quantity"
+                  placeholderTextColor={colors.gray[400]}
+                  value={editPartyOrderQty}
+                  onChangeText={(t) => {
+                    const cleaned = (t || '').replace(/[^0-9]/g, '');
+                    setEditPartyOrderQty(cleaned);
+                  }}
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                  editable={!submittingEditPartyOrder}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submitButton, submittingEditPartyOrder && styles.submitButtonDisabled]}
+                onPress={handleSubmitEditPartyOrder}
+                disabled={submittingEditPartyOrder}
+              >
+                {submittingEditPartyOrder ? (
+                  <ActivityIndicator color={colors.bg.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (showPartyDeliveryPage && deliveringPartyOrder) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.pageHeader}>
+          <TouchableOpacity onPress={handleClosePartyDeliveryModal} style={styles.pageBackBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.pageHeaderTitle}>Deliver Order</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView
+          style={styles.pageContent}
+          contentContainerStyle={{ paddingBottom: spacing[24] }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.customerInfoSection}>
+                <Text style={styles.customerNameModal}>{deliveringPartyOrder.customerName}</Text>
+                <Text style={styles.customerAddressModal}>{formatProductName(String(deliveringPartyOrder.productName || ''))}</Text>
+
+                {(() => {
+                  const customer = customers.find((c) => c.id === deliveringPartyOrder.customerId);
+                  if (!customer) return null;
+                  return (
+                    <View style={[styles.customerStats, { marginTop: spacing[8] }]}>
+                      <View style={styles.statItem}>
+                        <MaterialCommunityIcons name="wallet" size={16} color={colors.success[500]} />
+                        <Text style={styles.statLabel}>Balance: {currencyINR(customer.balance || 0)}</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.modalLabel}>Quantity *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Enter quantity"
+                  placeholderTextColor={colors.gray[400]}
+                  value={deliveryQtyInput}
+                  onChangeText={(t) => {
+                    const cleaned = (t || '').replace(/[^0-9]/g, '');
+                    setDeliveryQtyInput(cleaned);
+                    const nextQty = parseInt(cleaned || '0', 10) || 0;
+                    if (nextQty > 0) {
+                      schedulePartyOrderQuantityUpdate(deliveringPartyOrder, nextQty);
+                    }
+                  }}
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                  editable={!submittingPartyDelivery}
+                />
+              </View>
+
+              {(() => {
+                const customer = customers.find((c) => c.id === deliveringPartyOrder.customerId);
+                if (!customer) return null;
+
+                const customerBalance = Number(customer.balance ?? 0) || 0;
+                const qtyForBill = parseInt(deliveryQtyInput || '0', 10) || 0;
+
+                const unitPrice = getCustomerUnitPriceForOrder(deliveringPartyOrder, customer);
+
+                const billAmount = customerBalance + unitPrice * qtyForBill;
+
+                return (
+                  <View style={styles.billAmountRow}>
+                    <Text style={styles.billAmountLabel}>Bill Amount</Text>
+                    <Text style={styles.billAmountValue}>Rs {qtyForBill > 0 ? billAmount : customerBalance}</Text>
+                  </View>
+                );
+              })()}
+
+              <TouchableOpacity
+                style={[styles.submitButton, submittingPartyDelivery && styles.submitButtonDisabled]}
+                onPress={handleSubmitPartyDelivery}
+                disabled={submittingPartyDelivery}
+              >
+                {submittingPartyDelivery ? (
+                  <ActivityIndicator color={colors.bg.white} size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {historyCustomer ? (
@@ -859,7 +1202,11 @@ export default function PartyOrdersScreen({
               customer={{ ...selectedCustomer, id: selectedCustomer.id?.replace('edit-', '') || '' }}
               onBack={() => setSelectedCustomer(null)}
               onSave={(updatedCustomer) => {
-                setCustomers((prev) => prev.map((c) => (c.id === updatedCustomer.id ? updatedCustomer : c)));
+                setCustomers((prev) =>
+                  prev.map((c) =>
+                    c.id === updatedCustomer.id ? (updatedCustomer as Customer) : c
+                  )
+                );
                 setSelectedCustomer(updatedCustomer);
               }}
             />
@@ -950,7 +1297,7 @@ export default function PartyOrdersScreen({
             <FlatList
               data={filteredCustomers}
               renderItem={renderCustomerCard}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.id || ''}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={loading} onRefresh={loadCustomers} />}
@@ -989,7 +1336,7 @@ export default function PartyOrdersScreen({
         </>
       )}
 
-      <Modal visible={showOrderModal} transparent animationType="fade" onRequestClose={handleCloseOrderModal}>
+      <Modal visible={showOrderModal && !(userRole === 'employee' && !isAdmin)} transparent animationType="fade" onRequestClose={handleCloseOrderModal}>
         <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={styles.modalOverlay} onPress={handleCloseOrderModal}>
             <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
@@ -1099,7 +1446,7 @@ export default function PartyOrdersScreen({
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal visible={showEditPartyOrderModal} transparent animationType="fade" onRequestClose={handleCloseEditPartyOrder}>
+      <Modal visible={showEditPartyOrderModal && !(userRole === 'employee' && !isAdmin)} transparent animationType="fade" onRequestClose={handleCloseEditPartyOrder}>
         <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={styles.modalOverlay} onPress={handleCloseEditPartyOrder}>
             <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
@@ -1191,7 +1538,7 @@ export default function PartyOrdersScreen({
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal visible={showPartyDeliveryModal} transparent animationType="fade" onRequestClose={handleClosePartyDeliveryModal}>
+      <Modal visible={showPartyDeliveryModal && !(userRole === 'employee' && !isAdmin)} transparent animationType="fade" onRequestClose={handleClosePartyDeliveryModal}>
         <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={styles.modalOverlay} onPress={handleClosePartyDeliveryModal}>
             <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
@@ -1296,6 +1643,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.light,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[14],
+    backgroundColor: colors.bg.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pageBackBtn: {
+    padding: spacing[6],
+    marginRight: spacing[6],
+  },
+  pageHeaderTitle: {
+    flex: 1,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[800],
+  },
+  pageContent: {
+    flex: 1,
+    padding: spacing[16],
   },
   detailsContainer: {
     flex: 1,

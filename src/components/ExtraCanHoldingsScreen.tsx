@@ -9,6 +9,7 @@ import {
   BackHandler,
   RefreshControl,
   TextInput,
+  ScrollView,
   Modal,
   Pressable,
   Platform,
@@ -18,6 +19,7 @@ import { getCustomers, Customer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
+import EditCustomerScreen from './EditCustomerScreen';
 import ExtraCanHistoryScreen from './ExtraCanHistoryScreen';
 import { updateCustomer } from '../services/customerService';
 import { addPurchaseHistory } from '../services/purchaseHistoryService';
@@ -26,9 +28,13 @@ import { addDailyRecord } from '../services/dailyRecordService';
 import { getISTDate } from '../utils/dateUtils';
 import { getStocks, resolveProductName, updateStock } from '../services/stockService';
 
-interface Props { onBack?: () => void; }
+interface Props {
+  onBack?: () => void;
+  userRole?: 'owner' | 'employee';
+  isAdmin?: boolean;
+}
 
-export default function ExtraCanHoldingsScreen({ onBack }: Props) {
+export default function ExtraCanHoldingsScreen({ onBack, userRole = 'employee', isAdmin = false }: Props) {
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,6 +42,7 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [returnModal, setReturnModal] = useState(false);
+  const [returnPage, setReturnPage] = useState(false);
   const [returnCustomer, setReturnCustomer] = useState<Customer | null>(null);
   const [returnQty, setReturnQty] = useState('');
   const [returnProduct, setReturnProduct] = useState<'20L_CAN' | '20L_PARTY_CAN'>('20L_CAN');
@@ -51,6 +58,10 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
         setShowHistory(false);
         return true;
       }
+      if (returnPage) {
+        closeReturn();
+        return true;
+      }
       if (returnModal) {
         setReturnModal(false);
         return true;
@@ -62,7 +73,29 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
       return false;
     });
     return () => sub.remove();
-  }, [onBack, selectedCustomer, showHistory, returnModal]);
+  }, [onBack, selectedCustomer, showHistory, returnModal, returnPage]);
+
+  const openReturnModal = (customer: Customer) => {
+    setReturnCustomer(customer);
+    setReturnQty('');
+    setReturnProduct('20L_CAN');
+
+    if (userRole === 'employee' && !isAdmin) {
+      setReturnPage(true);
+      setReturnModal(false);
+    } else {
+      setReturnModal(true);
+      setReturnPage(false);
+    }
+  };
+
+  const closeReturn = () => {
+    setReturnModal(false);
+    setReturnPage(false);
+    setReturnCustomer(null);
+    setReturnQty('');
+    setSavingReturn(false);
+  };
 
   const load = async () => {
     try {
@@ -125,16 +158,9 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
     );
   };
 
-  const openReturnModal = (customer: Customer) => {
-    setReturnCustomer(customer);
-    setReturnQty('');
-    setReturnProduct('20L_CAN');
-    setReturnModal(true);
-  };
-
   const submitReturn = async () => {
     if (!returnCustomer?.id) {
-      setReturnModal(false);
+      closeReturn();
       return;
     }
     const qty = Number(returnQty || 0);
@@ -250,9 +276,7 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
         return;
       }
       await load();
-      setReturnModal(false);
-      setReturnCustomer(null);
-      setReturnQty('');
+      closeReturn();
     } catch (e) {
       const err = handleServiceError(e, 'updateCustomer');
       showError(err.message);
@@ -265,12 +289,37 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
 
   if (selectedCustomer) {
     return (
-      <CustomerDetailsScreen
-        customer={selectedCustomer as any}
-        onBack={() => setSelectedCustomer(null)}
-        onEdit={() => setSelectedCustomer(null)}
-        onViewHistory={() => setSelectedCustomer(null)}
-      />
+      <View style={styles.detailsContainer}>
+        {selectedCustomer.id?.includes('edit-') ? (
+          <EditCustomerScreen
+            customer={{
+              ...selectedCustomer,
+              id: selectedCustomer.id.replace('edit-', '') || '',
+            }}
+            onBack={() => setSelectedCustomer(null)}
+            onSave={(updatedCustomer: Customer) => {
+              setCustomers((prev) =>
+                prev.map((c) =>
+                  c.id === updatedCustomer.id ? (updatedCustomer as Customer) : c
+                )
+              );
+              setSelectedCustomer(updatedCustomer);
+            }}
+          />
+        ) : (
+          <CustomerDetailsScreen
+            customer={selectedCustomer as any}
+            onBack={() => setSelectedCustomer(null)}
+            onEdit={() =>
+              setSelectedCustomer({
+                ...selectedCustomer,
+                id: `edit-${selectedCustomer.id || ''}`,
+              })
+            }
+            onViewHistory={() => setSelectedCustomer(null)}
+          />
+        )}
+      </View>
     );
   }
 
@@ -280,107 +329,175 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        {onBack ? (
-          <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
-          </TouchableOpacity>
-        ) : null}
-        <Text style={styles.headerTitle}>Extra Can Holdings</Text>
-        <TouchableOpacity onPress={() => setShowHistory(true)} style={styles.historyBtn}>
-          <MaterialCommunityIcons name="history" size={20} color="#0f172a" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.searchBar}>
-        <MaterialCommunityIcons name="magnify" size={20} color="#94a3b8" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, phone, address"
-          placeholderTextColor="#94a3b8"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <MaterialCommunityIcons name="close-circle" size={18} color="#94a3b8" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#8b5cf6" /></View>
-      ) : (
+      {returnPage && returnCustomer ? (
         <View style={{ flex: 1 }}>
-          <FlatList
-            data={filtered}
-            keyExtractor={(item, idx) => item.id || String(idx)}
-            renderItem={renderItem}
-            contentContainerStyle={{ padding: 12, paddingBottom: 96 }}
-            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-            ListEmptyComponent={<Text style={styles.empty}>No extra cans recorded</Text>}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={async () => {
-                  setRefreshing(true);
-                  await load();
-                  setRefreshing(false);
-                }}
-                colors={["#8b5cf6"]}
-                tintColor="#8b5cf6"
-              />
-            }
-          />
-
-          <View style={styles.summaryBar}>
-            <View style={styles.summaryBadge}>
-              <Text style={styles.summaryLabel}>total extra cans</Text>
-              <Text style={styles.summaryValue}>{totalExtra}</Text>
-            </View>
+          <View style={styles.pageHeader}>
+            <TouchableOpacity onPress={closeReturn} style={styles.pageBackBtn}>
+              <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.pageHeaderTitle}>Return empty cans</Text>
+            <View style={{ width: 28 }} />
           </View>
 
-          <Modal visible={returnModal} transparent animationType="fade" onRequestClose={() => setReturnModal(false)}>
-            <Pressable style={styles.modalOverlay} onPress={() => setReturnModal(false)}>
-              <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Return empty cans</Text>
-                  <TouchableOpacity onPress={() => setReturnModal(false)}>
-                    <MaterialCommunityIcons name="close" size={20} color="#0f172a" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.modalSubtitle}>{returnCustomer?.name}</Text>
-                <Text style={styles.modalSubtitleSmall}>Holding: {returnCustomer?.extraCanHolding || 0}</Text>
-                <View style={styles.productSwitch}>
-                  {[
-                    { id: '20L_CAN' as const, label: '20L' },
-                    { id: '20L_PARTY_CAN' as const, label: '20L-P' },
-                  ].map(option => (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.productBtn, returnProduct === option.id && styles.productBtnActive]}
-                      onPress={() => setReturnProduct(option.id)}
-                    >
-                      <Text style={[styles.productBtnText, returnProduct === option.id && styles.productBtnTextActive]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Enter count"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
-                  value={returnQty}
-                  onChangeText={(text) => setReturnQty(text.replace(/[^0-9]/g, ''))}
-                />
-                <TouchableOpacity style={[styles.saveBtn, savingReturn && { opacity: 0.7 }]} onPress={submitReturn} disabled={savingReturn}>
-                  <Text style={styles.saveBtnText}>{savingReturn ? 'Saving...' : 'Save'}</Text>
+          <ScrollView
+            style={styles.pageContent}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            keyboardShouldPersistTaps="always"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.modalSubtitle}>{returnCustomer?.name}</Text>
+            <Text style={styles.modalSubtitleSmall}>Holding: {returnCustomer?.extraCanHolding || 0}</Text>
+            <View style={styles.productSwitch}>
+              {[
+                { id: '20L_CAN' as const, label: '20L' },
+                { id: '20L_PARTY_CAN' as const, label: '20L-P' },
+              ].map((option) => (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[styles.productBtn, returnProduct === option.id && styles.productBtnActive]}
+                  onPress={() => setReturnProduct(option.id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.productBtnText, returnProduct === option.id && styles.productBtnTextActive]}>
+                    {option.label}
+                  </Text>
                 </TouchableOpacity>
-              </Pressable>
-            </Pressable>
-          </Modal>
+              ))}
+            </View>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter count"
+              placeholderTextColor="#94a3b8"
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+              value={returnQty}
+              onChangeText={(text) => setReturnQty(text.replace(/[^0-9]/g, ''))}
+            />
+            <TouchableOpacity
+              style={[styles.saveBtn, savingReturn && { opacity: 0.7 }]}
+              onPress={submitReturn}
+              disabled={savingReturn}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.saveBtnText}>{savingReturn ? 'Saving...' : 'Save'}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      ) : (
+        <View style={{ flex: 1 }}>
+          <View style={styles.header}>
+            {onBack ? (
+              <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+                <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+              </TouchableOpacity>
+            ) : null}
+            <Text style={styles.headerTitle}>Extra Can Holdings</Text>
+            <TouchableOpacity onPress={() => setShowHistory(true)} style={styles.historyBtn}>
+              <MaterialCommunityIcons name="history" size={20} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.searchBar}>
+            <MaterialCommunityIcons name="magnify" size={20} color="#94a3b8" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name, phone, address"
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <MaterialCommunityIcons name="close-circle" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color="#8b5cf6" />
+            </View>
+          ) : (
+            <View style={{ flex: 1 }}>
+              <FlatList
+                data={filtered}
+                keyExtractor={(item, idx) => item.id || String(idx)}
+                renderItem={renderItem}
+                contentContainerStyle={{ padding: 12, paddingBottom: 96 }}
+                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                ListEmptyComponent={<Text style={styles.empty}>No extra cans recorded</Text>}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={async () => {
+                      setRefreshing(true);
+                      await load();
+                      setRefreshing(false);
+                    }}
+                    colors={["#8b5cf6"]}
+                    tintColor="#8b5cf6"
+                  />
+                }
+              />
+
+              <View style={styles.summaryBar}>
+                <View style={styles.summaryBadge}>
+                  <Text style={styles.summaryLabel}>total extra cans</Text>
+                  <Text style={styles.summaryValue}>{totalExtra}</Text>
+                </View>
+              </View>
+
+              <Modal
+                visible={returnModal && !(userRole === 'employee' && !isAdmin)}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setReturnModal(false)}
+              >
+                <Pressable style={styles.modalOverlay} onPress={() => setReturnModal(false)}>
+                  <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Return empty cans</Text>
+                      <TouchableOpacity onPress={() => setReturnModal(false)}>
+                        <MaterialCommunityIcons name="close" size={20} color="#0f172a" />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.modalSubtitle}>{returnCustomer?.name}</Text>
+                    <Text style={styles.modalSubtitleSmall}>Holding: {returnCustomer?.extraCanHolding || 0}</Text>
+                    <View style={styles.productSwitch}>
+                      {[
+                        { id: '20L_CAN' as const, label: '20L' },
+                        { id: '20L_PARTY_CAN' as const, label: '20L-P' },
+                      ].map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[styles.productBtn, returnProduct === option.id && styles.productBtnActive]}
+                          onPress={() => setReturnProduct(option.id)}
+                        >
+                          <Text style={[styles.productBtnText, returnProduct === option.id && styles.productBtnTextActive]}>
+                            {option.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Enter count"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                      value={returnQty}
+                      onChangeText={(text) => setReturnQty(text.replace(/[^0-9]/g, ''))}
+                    />
+                    <TouchableOpacity
+                      style={[styles.saveBtn, savingReturn && { opacity: 0.7 }]}
+                      onPress={submitReturn}
+                      disabled={savingReturn}
+                    >
+                      <Text style={styles.saveBtnText}>{savingReturn ? 'Saving...' : 'Save'}</Text>
+                    </TouchableOpacity>
+                  </Pressable>
+                </Pressable>
+              </Modal>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -389,10 +506,15 @@ export default function ExtraCanHoldingsScreen({ onBack }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
+  detailsContainer: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingTop: 8 },
   backBtn: { padding: 6, marginRight: 6 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', flex: 1 },
   historyBtn: { padding: 6, marginLeft: 6 },
+  pageHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingTop: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  pageBackBtn: { padding: 6, marginRight: 6 },
+  pageHeaderTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', flex: 1 },
+  pageContent: { flex: 1, padding: 12, backgroundColor: '#f8fafc' },
   searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginBottom: 8, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fff', gap: 8 },
   searchInput: { flex: 1, color: '#0f172a', paddingVertical: 0 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },

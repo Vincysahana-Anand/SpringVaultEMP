@@ -16,7 +16,7 @@ import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 
 interface Customer {
-  id: string;
+  id?: string;
   name: string;
 }
 

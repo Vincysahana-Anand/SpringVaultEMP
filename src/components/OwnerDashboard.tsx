@@ -408,7 +408,7 @@ export default function OwnerDashboard() {
         }))}
       >
         {currentScreen === 'customers' ? (
-          <CustomersListScreen allowCustomerDelete={true} />
+          <CustomersListScreen allowCustomerDelete={true} userRole="owner" isAdmin={true} />
         ) : currentScreen === 'partyOrders' ? (
           <PartyOrdersScreen allowCustomerDelete={true} userRole="owner" isAdmin={true} />
         ) : currentScreen === 'profile' ? (
@@ -462,6 +462,8 @@ export default function OwnerDashboard() {
           <DeliveriesScreen userRole="owner" isAdmin={true} />
         ) : currentScreen === 'reports' ? (
           <ReportsScreen
+            userRole="owner"
+            isAdmin={true}
             onBack={() => {
               setCurrentScreen('dashboard');
               setActiveTab('Home');
@@ -492,6 +494,8 @@ export default function OwnerDashboard() {
           />
         ) : currentScreen === 'paymentBalances' ? (
           <PaymentBalancesScreen
+            userRole="owner"
+            isAdmin={true}
             onBack={() => {
               setCurrentScreen('dashboard');
               setActiveTab('Home');
@@ -500,6 +504,8 @@ export default function OwnerDashboard() {
           />
         ) : currentScreen === 'extraCan' ? (
           <ExtraCanHoldingsScreen
+            userRole="owner"
+            isAdmin={true}
             onBack={() => {
               setCurrentScreen('dashboard');
               setActiveTab('Home');

@@ -9,6 +9,7 @@ import { getISTDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
+import EditCustomerScreen from './EditCustomerScreen';
 import PaymentHistoryScreen from './PaymentHistoryScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import RNPrint from 'react-native-print';
@@ -17,9 +18,13 @@ import Share from 'react-native-share';
 import { WebView } from 'react-native-webview';
 import { BANNER_PNG_DATA_URI } from '../assets/bannerDataUri';
 
-interface Props { onBack?: () => void; }
+interface Props {
+  onBack?: () => void;
+  userRole?: 'owner' | 'employee';
+  isAdmin?: boolean;
+}
 
-export default function PaymentBalancesScreen({ onBack }: Props) {
+export default function PaymentBalancesScreen({ onBack, userRole = 'employee', isAdmin = false }: Props) {
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,6 +33,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
   const [payCustomer, setPayCustomer] = useState<Customer | null>(null);
   const [showPayModal, setShowPayModal] = useState(false);
+  const [showPayPage, setShowPayPage] = useState(false);
   const [payMethod, setPayMethod] = useState<'cash' | 'online'>('cash');
   const [payAmount, setPayAmount] = useState('');
   const [payRef, setPayRef] = useState('');
@@ -35,12 +41,14 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
   const [showHistory, setShowHistory] = useState(false);
   const [billingFilter, setBillingFilter] = useState<'all' | 'cash' | 'monthly'>('all');
   const [showBillingFilterModal, setShowBillingFilterModal] = useState(false);
+  const [showBillingFilterPage, setShowBillingFilterPage] = useState(false);
 
   const [billCustomer, setBillCustomer] = useState<Customer | null>(null);
   const [billPurchases, setBillPurchases] = useState<PurchaseRecord[]>([]);
   const [billMonthOptions, setBillMonthOptions] = useState<Array<{ key: string; label: string; start: Date; end: Date }>>([]);
   const [billSelectedMonthKey, setBillSelectedMonthKey] = useState<string | null>(null);
   const [showBillOptionsModal, setShowBillOptionsModal] = useState(false);
+  const [showBillOptionsPage, setShowBillOptionsPage] = useState(false);
 
   const [printJob, setPrintJob] = useState<
     | null
@@ -108,6 +116,34 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         setShowPayModal(false);
         return true;
       }
+      if (showPayPage) {
+        setShowPayPage(false);
+        return true;
+      }
+      if (showBillingFilterModal) {
+        setShowBillingFilterModal(false);
+        return true;
+      }
+      if (showBillingFilterPage) {
+        setShowBillingFilterPage(false);
+        return true;
+      }
+      if (showBillOptionsModal) {
+        setShowBillOptionsModal(false);
+        return true;
+      }
+      if (showBillOptionsPage) {
+        setShowBillOptionsPage(false);
+        return true;
+      }
+      if (shareHtmlJob) {
+        setShareHtmlJob(null);
+        return true;
+      }
+      if (printJob) {
+        setPrintJob(null);
+        return true;
+      }
       if (historyCustomer) {
         setHistoryCustomer(null);
         return true;
@@ -123,7 +159,19 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       return false;
     });
     return () => sub.remove();
-  }, [onBack, selectedCustomer, showPayModal, historyCustomer]);
+  }, [
+    onBack,
+    selectedCustomer,
+    showPayModal,
+    showPayPage,
+    historyCustomer,
+    showBillingFilterModal,
+    showBillingFilterPage,
+    showBillOptionsModal,
+    showBillOptionsPage,
+    printJob,
+    shareHtmlJob,
+  ]);
 
   const load = async () => {
     try {
@@ -598,7 +646,13 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         setBillMonthOptions([]);
         setBillSelectedMonthKey(null);
       }
-      setShowBillOptionsModal(true);
+      if (userRole === 'employee' && !isAdmin) {
+        setShowBillOptionsPage(true);
+        setShowBillOptionsModal(false);
+      } else {
+        setShowBillOptionsModal(true);
+        setShowBillOptionsPage(false);
+      }
     } catch (e) {
       const err = handleServiceError(e, 'openBillOptions');
       showError(err.message);
@@ -643,16 +697,19 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     const customer = billCustomer;
     if (!customer?.id) {
       setShowBillOptionsModal(false);
+      setShowBillOptionsPage(false);
       return;
     }
     const res = resolveBillRecords();
     if (!res.ok) {
       setShowBillOptionsModal(false);
+      setShowBillOptionsPage(false);
       showError(res.message, { title: 'No History' });
       return;
     }
 
     setShowBillOptionsModal(false);
+    setShowBillOptionsPage(false);
 
     if (action === 'image') {
       try {
@@ -755,6 +812,9 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareHtmlJob?.customer?.id, shareHtmlReady]);
 
+  // ensure detailsContainer style exists
+  // (style block inserted later)
+
   const billingFilteredCustomers = useMemo(() => {
     if (billingFilter === 'all') return customers;
     return customers.filter((c) => {
@@ -786,7 +846,14 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
     setPayMethod('cash');
     setPayAmount((customer.balance || 0).toString());
     setPayRef('');
-    setShowPayModal(true);
+
+    if (userRole === 'employee' && !isAdmin) {
+      setShowPayPage(true);
+      setShowPayModal(false);
+    } else {
+      setShowPayModal(true);
+      setShowPayPage(false);
+    }
   };
 
   const submitPayment = async () => {
@@ -921,17 +988,387 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
 
   if (selectedCustomer) {
     return (
-      <CustomerDetailsScreen
-        customer={selectedCustomer as any}
-        onBack={() => setSelectedCustomer(null)}
-        onEdit={() => {}}
-        onViewHistory={() => openPurchaseHistory(selectedCustomer)}
-      />
+      <View style={styles.detailsContainer}>
+        {selectedCustomer.id?.includes('edit-') ? (
+          <EditCustomerScreen
+            customer={{
+              ...selectedCustomer,
+              id: selectedCustomer.id.replace('edit-', '') || '',
+            }}
+            onBack={() => setSelectedCustomer(null)}
+            onSave={(updatedCustomer: Customer) => {
+              setCustomers((prev) =>
+                prev.map((c) =>
+                  c.id === updatedCustomer.id ? (updatedCustomer as Customer) : c
+                )
+              );
+              setSelectedCustomer(updatedCustomer);
+            }}
+          />
+        ) : (
+          <CustomerDetailsScreen
+            customer={selectedCustomer as Customer}
+            onBack={() => setSelectedCustomer(null)}
+            onEdit={() =>
+              setSelectedCustomer({
+                ...selectedCustomer,
+                id: `edit-${selectedCustomer.id || ''}`,
+              })
+            }
+            onViewHistory={() => openPurchaseHistory(selectedCustomer)}
+          />
+        )}
+      </View>
     );
   }
 
   if (showHistory) {
     return <PaymentHistoryScreen onBack={() => setShowHistory(false)} />;
+  }
+
+  if (showPayPage && payCustomer) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setShowPayPage(false)} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Record Payment</Text>
+          <View style={styles.headerActions} />
+        </View>
+
+        <ScrollView
+          style={{ flex: 1, padding: 12 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.modalSubtitle}>{payCustomer?.name}</Text>
+          <Text style={styles.modalSubtitleSmall}>{payCustomer?.mobile}</Text>
+
+          <View style={styles.methodRow}>
+            <TouchableOpacity
+              style={[styles.methodBtn, payMethod === 'cash' && styles.methodBtnActive]}
+              onPress={() => setPayMethod('cash')}
+              disabled={submittingPay}
+            >
+              <Text style={[styles.methodText, payMethod === 'cash' && styles.methodTextActive]}>Cash</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.methodBtn, payMethod === 'online' && styles.methodBtnActive]}
+              onPress={() => setPayMethod('online')}
+              disabled={submittingPay}
+            >
+              <Text style={[styles.methodText, payMethod === 'online' && styles.methodTextActive]}>Online</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Amount</Text>
+            <TextInput
+              style={styles.fieldInput}
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+              value={payAmount}
+              onChangeText={setPayAmount}
+              placeholder="0"
+            />
+          </View>
+
+          {payMethod === 'online' ? (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>UTR / UPI Transaction ID</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={payRef}
+                onChangeText={(text) => setPayRef(text.replace(/[^0-9]/g, ''))}
+                placeholder="Enter reference"
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+              />
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.saveBtn, submittingPay && { opacity: 0.6 }]}
+            onPress={submitPayment}
+            disabled={submittingPay}
+          >
+            {submittingPay ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (showBillingFilterPage) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setShowBillingFilterPage(false)} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Filter Billing Type</Text>
+          <View style={styles.headerActions} />
+        </View>
+
+        <View style={{ padding: 12 }}>
+          <TouchableOpacity
+            style={[styles.filterOption, billingFilter === 'all' ? styles.filterOptionActive : null]}
+            onPress={() => {
+              setBillingFilter('all');
+              setShowBillingFilterPage(false);
+            }}
+          >
+            <Text style={[styles.filterOptionText, billingFilter === 'all' ? styles.filterOptionTextActive : null]}>All</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterOption, billingFilter === 'cash' ? styles.filterOptionActive : null]}
+            onPress={() => {
+              setBillingFilter('cash');
+              setShowBillingFilterPage(false);
+            }}
+          >
+            <Text style={[styles.filterOptionText, billingFilter === 'cash' ? styles.filterOptionTextActive : null]}>Cash</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterOption, billingFilter === 'monthly' ? styles.filterOptionActive : null]}
+            onPress={() => {
+              setBillingFilter('monthly');
+              setShowBillingFilterPage(false);
+            }}
+          >
+            <Text style={[styles.filterOptionText, billingFilter === 'monthly' ? styles.filterOptionTextActive : null]}>Monthly</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (showBillOptionsPage) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setShowBillOptionsPage(false)} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Bill Options</Text>
+          <View style={styles.headerActions} />
+        </View>
+
+        <ScrollView style={{ flex: 1, padding: 12 }} contentContainerStyle={{ paddingBottom: 24 }}>
+          {billCustomer && isMonthlyBilling(billCustomer) ? (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.billSubTitle}>Select Month (last 3 months)</Text>
+              <View style={styles.monthRow}>
+                {billMonthOptions.map((m) => {
+                  const active = billSelectedMonthKey === m.key;
+                  return (
+                    <TouchableOpacity
+                      key={m.key}
+                      style={[styles.monthChip, active ? styles.monthChipActive : null]}
+                      onPress={() => setBillSelectedMonthKey(m.key)}
+                    >
+                      <Text style={[styles.monthChipText, active ? styles.monthChipTextActive : null]}>{m.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.billActionRow}>
+            <TouchableOpacity style={styles.billActionBtn} onPress={() => startBillAction('image')}>
+              <MaterialCommunityIcons name="image-outline" size={20} color="#0ea5e9" />
+              <Text style={styles.billActionText}>Image</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.billActionBtn} onPress={() => startBillAction('print')}>
+              <MaterialCommunityIcons name="printer-outline" size={20} color="#16a34a" />
+              <Text style={styles.billActionText}>Print</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (printingBill && userRole === 'employee' && !isAdmin && !printJob && !shareHtmlJob) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setPrintingBill(false)} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Preparing bill…</Text>
+          <View style={styles.headerActions} />
+        </View>
+
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#0ea5e9" />
+        </View>
+      </View>
+    );
+  }
+
+  if (printJob && userRole === 'employee' && !isAdmin) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setPrintJob(null)} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Preparing bill…</Text>
+          <View style={styles.headerActions} />
+        </View>
+
+        <View style={styles.printOverlay}>
+          <View style={styles.printCard}>
+            <View style={styles.printHeader}>
+              <Text style={styles.printTitle}>Preparing bill…</Text>
+              {printingBill ? <ActivityIndicator size="small" color="#0ea5e9" /> : null}
+            </View>
+
+            <ViewShot
+              ref={(r) => {
+                receiptRef.current = r;
+              }}
+              options={{ format: 'jpg', quality: 0.92 }}
+            >
+              <View style={styles.receiptRoot}>
+                <View style={styles.receiptRootInner} onLayout={() => setReceiptLaidOut(true)} collapsable={false}>
+                  <Image
+                    source={shareBannerDataUri ? ({ uri: shareBannerDataUri } as any) : shareBannerSource}
+                    style={styles.receiptBanner}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    onLoadEnd={() => setReceiptBannerLoaded(true)}
+                    onLoad={() => setReceiptBannerLoaded(true)}
+                    onError={() => setReceiptBannerLoaded(true)}
+                  />
+                  <Text style={styles.receiptAddress}>
+                    No.1 E/2, 19th Central Cross Street,{"\n"}
+                    2nd Main Road, M.K.B Nagar, Chennai - 600039 {"\n"}
+                    Phone: 73056 99866
+                  </Text>
+
+                  <View style={styles.receiptBody}>
+                    <View style={styles.receiptDivider} />
+
+                    <Text style={styles.receiptCustomerName}>{printJob?.customer?.name || ''}</Text>
+                    <Text style={styles.receiptLine}>{printJob?.customer?.mobile || ''}</Text>
+                    <Text style={styles.receiptLine}>{buildFullAddress(printJob?.customer as any) || 'No address'}</Text>
+                    <Text style={styles.receiptLine}>Price: ₹{String(Number((printJob?.customer as any)?.price || 0) || 0)}</Text>
+
+                    <View style={styles.receiptDivider} />
+
+                    <View style={styles.receiptTableHeader}>
+                      <Text style={[styles.receiptTh, styles.receiptColLeft]}>Date</Text>
+                      <Text style={[styles.receiptTh, styles.receiptColRight]}>Qty</Text>
+                    </View>
+
+                    {(printJob?.records || []).map((r, idx) => (
+                      <View key={`${idx}`} style={styles.receiptRow}>
+                        <Text style={styles.receiptColLeft}>{formatReceiptDate(r)}</Text>
+                        <Text style={[styles.receiptColRight, styles.receiptTdRight]}>{String(Number(r.deliveredQty || 0) || 0)}</Text>
+                      </View>
+                    ))}
+
+                    <View style={styles.receiptDivider} />
+
+                    {(() => {
+                      const qty = (printJob?.records || []).reduce((sum, r) => sum + (Number(r.deliveredQty || 0) || 0), 0);
+                      const unitPrice = Number((printJob?.customer as any)?.price || 0) || 0;
+                      const computed = qty * unitPrice;
+                      const balance = Number((printJob?.customer as any)?.balance || 0) || 0;
+                      const pending = computed < balance ? balance - computed : 0;
+
+                      return (
+                        <View>
+                          <View style={styles.receiptTotalsRow}>
+                            <Text style={styles.receiptTotalsLabel}>Total Qty</Text>
+                            <Text style={styles.receiptTotalsValue}>{String(qty)}</Text>
+                          </View>
+
+                          {pending > 0 ? (
+                            <View style={styles.receiptTotalsRow}>
+                              <Text style={[styles.receiptPending, styles.receiptTotalsLabel]}>Pending</Text>
+                              <Text style={[styles.receiptPending, styles.receiptTotalsValue]}>₹{String(pending)}</Text>
+                            </View>
+                          ) : null}
+
+                          <View style={styles.receiptTotalsRow}>
+                            <Text style={styles.receiptTotalLabel}>Total</Text>
+                            <Text style={styles.receiptTotalValue}>₹{String(balance)}</Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
+
+                    <View style={{ height: 18 }} />
+                    <Text style={styles.receiptThankYou}>Thank you!</Text>
+                  </View>
+                </View>
+              </View>
+            </ViewShot>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (shareHtmlJob && userRole === 'employee' && !isAdmin) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setShareHtmlJob(null)} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Preparing bill…</Text>
+          <View style={styles.headerActions} />
+        </View>
+
+        <View style={styles.printOverlay}>
+          <View style={styles.printCard}>
+            <View style={styles.printHeader}>
+              <Text style={styles.printTitle}>Preparing bill…</Text>
+              {printingBill ? <ActivityIndicator size="small" color="#0ea5e9" /> : null}
+            </View>
+
+            <ViewShot
+              ref={(r) => {
+                shareHtmlShotRef.current = r;
+              }}
+              options={{ format: 'jpg', quality: 0.92 }}
+            >
+              <View style={{ backgroundColor: '#fff', width: 380, height: shareHtmlHeight }}>
+                <WebView
+                  originWhitelist={['*']}
+                  source={{ html: shareHtmlJob?.html || '' }}
+                  androidLayerType="software"
+                  javaScriptEnabled
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                  onMessage={(e) => {
+                    try {
+                      const data = JSON.parse(String(e.nativeEvent.data || '{}'));
+                      if (data?.type === 'ready') {
+                        const h = Number(data.height || 0);
+                        if (h > 0) setShareHtmlHeight(Math.min(2200, Math.max(700, h)));
+                        setShareHtmlReady(true);
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  style={{ width: 380, height: shareHtmlHeight, backgroundColor: '#fff' }}
+                />
+              </View>
+            </ViewShot>
+          </View>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -945,7 +1382,18 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         <Text style={styles.headerTitle}>Payment Balances</Text>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => setShowBillingFilterModal(true)} style={styles.historyBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              if (userRole === 'employee' && !isAdmin) {
+                setShowBillingFilterPage(true);
+                setShowBillingFilterModal(false);
+              } else {
+                setShowBillingFilterModal(true);
+                setShowBillingFilterPage(false);
+              }
+            }}
+            style={styles.historyBtn}
+          >
             <MaterialCommunityIcons
               name="filter-variant"
               size={20}
@@ -1008,7 +1456,12 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
         </View>
       ) : null}
 
-      <Modal visible={showPayModal} transparent animationType="fade" onRequestClose={() => setShowPayModal(false)}>
+      <Modal
+        visible={showPayModal && !(userRole === 'employee' && !isAdmin)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPayModal(false)}
+      >
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowPayModal(false)} />
           <View style={styles.modalCard}>
@@ -1077,7 +1530,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       </Modal>
 
       <Modal
-        visible={showBillingFilterModal}
+        visible={showBillingFilterModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={() => setShowBillingFilterModal(false)}
@@ -1130,7 +1583,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       </Modal>
 
       <Modal
-        visible={showBillOptionsModal}
+        visible={showBillOptionsModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={() => setShowBillOptionsModal(false)}
@@ -1177,7 +1630,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
       </Modal>
 
       <Modal
-        visible={printingBill && !printJob}
+        visible={printingBill && !printJob && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={() => {}}
@@ -1348,6 +1801,7 @@ export default function PaymentBalancesScreen({ onBack }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
+  detailsContainer: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingTop: 8 },
   backBtn: { padding: 6, marginRight: 6 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', flex: 1 },

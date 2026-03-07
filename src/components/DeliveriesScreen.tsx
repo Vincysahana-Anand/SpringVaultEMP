@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Alert,
   Linking,
+  BackHandler,
   Modal,
   Pressable,
   ActivityIndicator,
@@ -53,6 +54,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [showPendingFilterModal, setShowPendingFilterModal] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [showDeliveryPage, setShowDeliveryPage] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [fullBottlesDelivered, setFullBottlesDelivered] = useState('0');
   const [emptyBottlesCollected, setEmptyBottlesCollected] = useState('0');
@@ -61,6 +63,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [paymentRef, setPaymentRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showEditPage, setShowEditPage] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editProductId, setEditProductId] = useState('');
   const [editProductName, setEditProductName] = useState('');
@@ -73,6 +76,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [selectedCustomerData, setSelectedCustomerData] = useState<Customer | null>(null);
   const [completedDeliveries, setCompletedDeliveries] = useState<DailyRecordEntry[]>([]);
   const [selectedCompletedDelivery, setSelectedCompletedDelivery] = useState<DailyRecordEntry | null>(null);
+  const [showPendingFilterPage, setShowPendingFilterPage] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -89,6 +93,42 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   useEffect(() => {
     filterOrders();
   }, [searchQuery, orders, completedDeliveries, customers, activeTab, pendingProductFilter]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showPendingFilterPage) {
+        setShowPendingFilterPage(false);
+        return true;
+      }
+      if (showEditPage || showEditModal) {
+        handleCloseEditModal();
+        return true;
+      }
+      if (showDeliveryPage || showDeliveryModal) {
+        handleCloseDeliveryModal();
+        return true;
+      }
+      if (showPendingFilterModal) {
+        setShowPendingFilterModal(false);
+        return true;
+      }
+      if (selectedCompletedDelivery) {
+        setSelectedCompletedDelivery(null);
+        return true;
+      }
+      return false;
+    });
+
+    return () => sub.remove();
+  }, [
+    selectedCompletedDelivery,
+    showDeliveryModal,
+    showDeliveryPage,
+    showEditModal,
+    showEditPage,
+    showPendingFilterModal,
+    showPendingFilterPage,
+  ]);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -270,7 +310,14 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     setAmountPaid('0');
     setPaymentMethod('cash');
     setPaymentRef('');
-    setShowDeliveryModal(true);
+
+    if (userRole === 'employee' && !isAdmin) {
+      setShowDeliveryPage(true);
+      setShowDeliveryModal(false);
+    } else {
+      setShowDeliveryModal(true);
+      setShowDeliveryPage(false);
+    }
 
     // Always fetch the latest customer data (including balance/price) for billing display
     try {
@@ -296,6 +343,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
   const handleCloseDeliveryModal = () => {
     setShowDeliveryModal(false);
+    setShowDeliveryPage(false);
     setSelectedOrder(null);
     setFullBottlesDelivered('0');
     setEmptyBottlesCollected('0');
@@ -608,11 +656,18 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     setEditProductId(order.productId || '');
     setEditProductName(order.productName || '');
     setEditQuantity(order.quantity?.toString() || '1');
-    setShowEditModal(true);
+    if (userRole === 'employee' && !isAdmin) {
+      setShowEditPage(true);
+      setShowEditModal(false);
+    } else {
+      setShowEditModal(true);
+      setShowEditPage(false);
+    }
   };
 
   const handleCloseEditModal = () => {
     setShowEditModal(false);
+    setShowEditPage(false);
     setEditingOrder(null);
     setEditProductId('');
     setEditProductName('');
@@ -812,6 +867,303 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     );
   };
 
+  if (showPendingFilterPage) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={() => setShowPendingFilterPage(false)} style={styles.detailBackButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Filter by Product</Text>
+          <View style={styles.detailHeaderSpacer} />
+        </View>
+
+        <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
+          <View style={styles.filterModalContent}>
+            {(['all', '20L', '1L', '500ml', '300ml'] as PendingProductFilter[]).map((opt) => {
+              const selected = opt === pendingProductFilter;
+              const label = opt === 'all' ? 'All' : opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={styles.filterOptionRow}
+                  onPress={() => {
+                    setPendingProductFilter(opt);
+                    setShowPendingFilterPage(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterOptionText, selected && styles.filterOptionTextSelected]}>
+                    {label}
+                  </Text>
+                  {selected ? (
+                    <MaterialCommunityIcons name="check" size={20} color={colors.primary[600]} />
+                  ) : (
+                    <View style={{ width: 20, height: 20 }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={{ height: spacing[24] }} />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (showEditPage && editingOrder) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={handleCloseEditModal} style={styles.detailBackButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Order</Text>
+          <View style={styles.detailHeaderSpacer} />
+        </View>
+
+        <ScrollView
+          style={styles.detailsContent}
+          contentContainerStyle={{ paddingBottom: spacing[24] }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.modalContent}>
+            {/* Customer Info */}
+            <View style={styles.customerInfoSection}>
+              <Text style={styles.customerNameModal}>{editingOrder.customerName}</Text>
+              <Text style={styles.productInfoModal}>{editingOrder.address}</Text>
+            </View>
+
+            {/* Product Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Product *</Text>
+              {loadingProducts ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                  <Text style={styles.loadingText}>Loading products...</Text>
+                </View>
+              ) : products.length === 0 ? (
+                <Text style={styles.noProductsText}>No products available</Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.productSelector}
+                  contentContainerStyle={styles.productSelectorContent}
+                >
+                  {getFilteredProducts(editingOrder).map((product: Stock) => (
+                    <TouchableOpacity
+                      key={product.id}
+                      style={[styles.productButton, editProductId === product.id && styles.productButtonActive]}
+                      onPress={() => {
+                        setEditProductId(product.id || '');
+                        setEditProductName(formatProductName(product.productName));
+                      }}
+                      disabled={submittingEdit}
+                    >
+                      <Text style={[styles.productButtonText, editProductId === product.id && styles.productButtonTextActive]}>
+                        {formatProductName(product.productName)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Quantity Input */}
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Quantity *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter quantity"
+                placeholderTextColor={colors.gray[400]}
+                value={editQuantity}
+                onChangeText={setEditQuantity}
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                editable={!submittingEdit}
+              />
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitButton, submittingEdit && styles.submitButtonDisabled]}
+              onPress={handleSubmitEdit}
+              disabled={submittingEdit}
+            >
+              {submittingEdit ? (
+                <ActivityIndicator color={colors.bg.white} size="small" />
+              ) : (
+                <Text style={styles.submitButtonText}>Update Order</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (showDeliveryPage && selectedOrder) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={handleCloseDeliveryModal} style={styles.detailBackButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Complete Delivery</Text>
+          <View style={styles.detailHeaderSpacer} />
+        </View>
+
+        <ScrollView
+          style={styles.detailsContent}
+          contentContainerStyle={{ paddingBottom: spacing[24] }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.modalContent}>
+            {/* Customer Info */}
+            <View style={styles.customerInfoSection}>
+              <Text style={styles.customerNameModal}>{selectedOrder.customerName}</Text>
+              <Text style={styles.productInfoModal}>{selectedOrder.address}</Text>
+              <View style={styles.productBadgeContainer}>
+                <View style={styles.productBadge}>
+                  <Text style={styles.productBadgeText}>
+                    {selectedOrder.productName} x {selectedOrder.quantity}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Full Bottles Delivered */}
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Full Water Bottles Delivered</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="0"
+                placeholderTextColor={colors.gray[400]}
+                value={fullBottlesDelivered}
+                onChangeText={setFullBottlesDelivered}
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                editable={!submitting}
+              />
+            </View>
+
+            {/* Empty Bottles Collected - Only for 20L cans */}
+            {selectedOrder.productName &&
+              selectedOrder.productName.toLowerCase().includes('20') &&
+              selectedOrder.productName.toLowerCase().includes('liter') && (
+                <View style={styles.formGroup}>
+                  <Text style={styles.modalLabel}>Empty Water Bottles Collected</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="0"
+                    placeholderTextColor={colors.gray[400]}
+                    value={emptyBottlesCollected}
+                    onChangeText={setEmptyBottlesCollected}
+                    onFocus={() => {
+                      if (emptyBottlesCollected === '0') {
+                        setEmptyBottlesCollected('');
+                      }
+                    }}
+                    onBlur={() => {
+                      if (emptyBottlesCollected.trim() === '') {
+                        setEmptyBottlesCollected('0');
+                      }
+                    }}
+                    keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                    editable={!submitting}
+                  />
+                </View>
+              )}
+
+            {selectedCustomerData && (
+              <View style={styles.billAmountRow}>
+                <Text style={styles.billAmountLabel}>Bill Amount</Text>
+                <Text style={styles.billAmountValue}>
+                  Rs {parsedFullBottlesForBill > 0 ? billAmount : billCustomerBalance}
+                </Text>
+              </View>
+            )}
+
+            {/* Payment Method */}
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Payment Method</Text>
+              <View style={styles.paymentMethodContainer}>
+                <TouchableOpacity
+                  style={[styles.paymentMethodButton, paymentMethod === 'cash' && styles.paymentMethodButtonActive]}
+                  onPress={() => setPaymentMethod('cash')}
+                  disabled={submitting}
+                >
+                  <Text style={[styles.paymentMethodText, paymentMethod === 'cash' && styles.paymentMethodTextActive]}>Cash</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.paymentMethodButton, paymentMethod === 'online' && styles.paymentMethodButtonActive]}
+                  onPress={() => setPaymentMethod('online')}
+                  disabled={submitting}
+                >
+                  <Text style={[styles.paymentMethodText, paymentMethod === 'online' && styles.paymentMethodTextActive]}>Online</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Amount Paid */}
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Amount</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="0"
+                placeholderTextColor={colors.gray[400]}
+                value={amountPaid}
+                onChangeText={setAmountPaid}
+                onFocus={() => {
+                  if (amountPaid === '0') {
+                    setAmountPaid('');
+                  }
+                }}
+                onBlur={() => {
+                  if (amountPaid.trim() === '') {
+                    setAmountPaid('0');
+                  }
+                }}
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                editable={!submitting}
+              />
+            </View>
+
+            {/* UTR / UPI Transaction ID for online payments */}
+            {paymentMethod === 'online' && (
+              <View style={styles.formGroup}>
+                <Text style={styles.modalLabel}>UTR / UPI Transaction ID *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Enter UTR / UPI Transaction ID"
+                  placeholderTextColor={colors.gray[400]}
+                  value={paymentRef}
+                  onChangeText={(text) => setPaymentRef(text.replace(/[^0-9]/g, ''))}
+                  editable={!submitting}
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                />
+              </View>
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+              onPress={handleSubmitDelivery}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color={colors.bg.white} size="small" />
+              ) : (
+                <Text style={styles.submitButtonText}>Complete Delivery</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   // Render content based on state
   let content;
 
@@ -981,7 +1333,15 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
         {activeTab === 'pending' && (
           <TouchableOpacity
-            onPress={() => setShowPendingFilterModal(true)}
+            onPress={() => {
+              if (userRole === 'employee' && !isAdmin) {
+                setShowPendingFilterPage(true);
+                setShowPendingFilterModal(false);
+              } else {
+                setShowPendingFilterModal(true);
+                setShowPendingFilterPage(false);
+              }
+            }}
             style={styles.pendingFilterButton}
             activeOpacity={0.85}
           >
@@ -1050,7 +1410,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
       {/* Complete Delivery Modal */}
       <Modal
-        visible={showDeliveryModal}
+        visible={showDeliveryModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={handleCloseDeliveryModal}
@@ -1226,7 +1586,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
       {/* Edit Order Modal */}
       <Modal
-        visible={showEditModal}
+        visible={showEditModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={handleCloseEditModal}
@@ -1341,7 +1701,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
 
       {/* Pending Product Filter Modal */}
       <Modal
-        visible={showPendingFilterModal}
+        visible={showPendingFilterModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={() => setShowPendingFilterModal(false)}

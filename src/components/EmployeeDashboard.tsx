@@ -410,7 +410,7 @@ export default function EmployeeDashboard() {
           }))}
         >
           {currentScreen === 'customers' ? (
-            <CustomersListScreen allowCustomerDelete={false} />
+            <CustomersListScreen allowCustomerDelete={false} userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'partyOrders' ? (
             <PartyOrdersScreen allowCustomerDelete={false} userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'profile' ? (
@@ -426,6 +426,8 @@ export default function EmployeeDashboard() {
             <DeliveriesScreen userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'reports' ? (
             <ReportsScreen
+              userRole="employee"
+              isAdmin={isAdmin}
               onBack={() => {
                 setCurrentScreen('dashboard');
                 setActiveTab('Home');
@@ -456,6 +458,8 @@ export default function EmployeeDashboard() {
             />
           ) : currentScreen === 'paymentBalances' ? (
             <PaymentBalancesScreen
+              userRole="employee"
+              isAdmin={isAdmin}
               onBack={() => {
                 setCurrentScreen('dashboard');
                 setActiveTab('Home');
@@ -464,6 +468,8 @@ export default function EmployeeDashboard() {
             />
           ) : currentScreen === 'extraCan' ? (
             <ExtraCanHoldingsScreen
+              userRole="employee"
+              isAdmin={isAdmin}
               onBack={() => {
                 setCurrentScreen('dashboard');
                 setActiveTab('Home');

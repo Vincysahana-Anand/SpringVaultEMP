@@ -15,26 +15,7 @@ import { updateCustomer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 
-interface Customer {
-  id: string;
-  name: string;
-  mobile: string;
-  doorNumber?: string;
-  floor?: string;
-  street?: string;
-  area?: string;
-  alternateContacts?: string[];
-  advanceAmount?: number;
-  canHolding?: number;
-  extraCanHolding?: number;
-  customerType?: string;
-  billingType?: string;
-  price?: number;
-  '1lPrice'?: number;
-  '500mlPrice'?: number;
-  '300mlPrice'?: number;
-  balance?: number;
-}
+import { Customer } from '../services/customerService';
 
 interface EditCustomerScreenProps {
   customer: Customer;
@@ -87,7 +68,8 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
 
     try {
       setLoading(true);
-      await updateCustomer(formData.id, formData as any);
+      // id may be undefined according to service type; guard with empty string
+      await updateCustomer(formData.id || '', formData as any);
       onSave(formData);
     } catch (e) {
       const err = handleServiceError(e, 'updateCustomer');

@@ -16,26 +16,7 @@ import { deleteCustomer } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
 
-interface Customer {
-  id: string;
-  name: string;
-  mobile: string;
-  doorNumber?: string;
-  floor?: string;
-  street?: string;
-  area?: string;
-  alternateContacts?: string[];
-  advanceAmount?: number;
-  canHolding?: number;
-  extraCanHolding?: number;
-  customerType?: string;
-  billingType?: string;
-  price?: number;
-  '1lPrice'?: number;
-  '500mlPrice'?: number;
-  '300mlPrice'?: number;
-  balance?: number;
-}
+import { Customer } from '../services/customerService';
 
 interface CustomerDetailsScreenProps {
   customer: Customer;
@@ -99,14 +80,15 @@ export default function CustomerDetailsScreen({
           onPress: async () => {
             try {
               setDeleting(true);
-              const result = await deleteCustomer(customer.id);
+              const id = customer.id || '';
+              const result = await deleteCustomer(id);
               if (result !== true) {
                 const err = handleServiceError(result, 'deleteCustomer');
                 showError(err.message);
                 return;
               }
               showSuccess('Customer deleted');
-              onDeleted?.(customer.id);
+              onDeleted?.(id);
               onBack();
             } catch (e) {
               const err = handleServiceError(e, 'deleteCustomer');

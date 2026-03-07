@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   Pressable,
+  BackHandler,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -26,6 +27,8 @@ type Mode = 'day' | 'week' | 'month' | 'range' | 'year';
 
 interface Props {
   onBack: () => void;
+  userRole?: 'owner' | 'employee';
+  isAdmin?: boolean;
 }
 
 const formatDateKey = (date: Date) => {
@@ -65,11 +68,13 @@ type Totals = {
   daysWithData: number;
 };
 
-export default function ReportsScreen({ onBack }: Props) {
+export default function ReportsScreen({ onBack, userRole = 'employee', isAdmin = false }: Props) {
   const [mode, setMode] = useState<Mode>('day');
   const [loading, setLoading] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showExportPage, setShowExportPage] = useState(false);
+  const [showMonthPickerPage, setShowMonthPickerPage] = useState(false);
 
   const [dayDate, setDayDate] = useState<Date>(() => {
     const today = getISTDate();
@@ -608,6 +613,122 @@ export default function ReportsScreen({ onBack }: Props) {
     }
   };
 
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showExportPage) {
+        setShowExportPage(false);
+        return true;
+      }
+      if (showMonthPickerPage) {
+        setShowMonthPickerPage(false);
+        return true;
+      }
+      if (showExportModal) {
+        setShowExportModal(false);
+        return true;
+      }
+      if (showMonthPicker) {
+        setShowMonthPicker(false);
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [showExportModal, showExportPage, showMonthPicker, showMonthPickerPage]);
+
+  if (showExportPage) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setShowExportPage(false)} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Export</Text>
+          <View style={{ width: 38 }} />
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Export</Text>
+            <Text style={styles.modalSub}>Google Sheets integration is planned (coming soon).</Text>
+
+            <TouchableOpacity
+              style={styles.modalAction}
+              onPress={async () => {
+                setShowExportPage(false);
+                await exportPdf();
+              }}
+            >
+              <MaterialCommunityIcons name="file-pdf-box" size={20} color={colors.danger[600]} />
+              <Text style={styles.modalActionText}>Export as PDF</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalAction}
+              onPress={async () => {
+                setShowExportPage(false);
+                await exportCsv();
+              }}
+            >
+              <MaterialCommunityIcons name="file-excel" size={20} color={colors.success[700]} />
+              <Text style={styles.modalActionText}>Export as CSV (Excel)</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.modalAction, styles.modalActionDisabled]}>
+              <MaterialCommunityIcons name="google-spreadsheet" size={20} color={colors.gray[400]} />
+              <Text style={[styles.modalActionText, { color: colors.gray[400] }]}>Add to Google Sheets (Coming soon)</Text>
+            </View>
+          </View>
+
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (showMonthPickerPage) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setShowMonthPickerPage(false)} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.gray[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Select Month</Text>
+          <View style={{ width: 38 }} />
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Select Month</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[10] }}>
+              {Array.from({ length: 12 }).map((_, idx) => {
+                const label = new Date(2000, idx, 1).toLocaleString('en-IN', { month: 'short' });
+                const active = idx === monthIndex;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => {
+                      setMonthIndex(idx);
+                      setShowMonthPickerPage(false);
+                    }}
+                    style={[styles.monthChip, active ? styles.monthChipActive : styles.monthChipInactive]}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.monthChipText, active ? styles.monthChipTextActive : styles.monthChipTextInactive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -615,7 +736,18 @@ export default function ReportsScreen({ onBack }: Props) {
           <MaterialCommunityIcons name="arrow-left" size={22} color={colors.gray[800]} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reports</Text>
-        <TouchableOpacity onPress={() => setShowExportModal(true)} style={styles.exportButton}>
+        <TouchableOpacity
+          onPress={() => {
+            if (userRole === 'employee' && !isAdmin) {
+              setShowExportPage(true);
+              setShowExportModal(false);
+            } else {
+              setShowExportModal(true);
+              setShowExportPage(false);
+            }
+          }}
+          style={styles.exportButton}
+        >
           <MaterialCommunityIcons name="export-variant" size={20} color={colors.gray[700]} />
         </TouchableOpacity>
       </View>
@@ -664,7 +796,15 @@ export default function ReportsScreen({ onBack }: Props) {
             <>
               <TouchableOpacity
                 style={styles.dateRow}
-                onPress={() => setShowMonthPicker(true)}
+                onPress={() => {
+                  if (userRole === 'employee' && !isAdmin) {
+                    setShowMonthPickerPage(true);
+                    setShowMonthPicker(false);
+                  } else {
+                    setShowMonthPicker(true);
+                    setShowMonthPickerPage(false);
+                  }
+                }}
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="calendar-month" size={18} color={colors.gray[600]} />
@@ -806,7 +946,7 @@ export default function ReportsScreen({ onBack }: Props) {
       </ScrollView>
 
       <Modal
-        visible={showExportModal}
+        visible={showExportModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={() => setShowExportModal(false)}
@@ -847,7 +987,7 @@ export default function ReportsScreen({ onBack }: Props) {
       </Modal>
 
       <Modal
-        visible={showMonthPicker}
+        visible={showMonthPicker && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={() => setShowMonthPicker(false)}

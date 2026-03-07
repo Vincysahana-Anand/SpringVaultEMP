@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { getCustomers } from '../services/customerService';
+import { getCustomers, Customer } from '../services/customerService';
 import { getStocks, Stock } from '../services/stockService';
 import { updateSalesRecord } from '../services/salesService';
 import { addOrder, getOrders, Order } from '../services/orderService';
@@ -30,33 +30,24 @@ import CustomerDetailsScreen from './CustomerDetailsScreen';
 import EditCustomerScreen from './EditCustomerScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 
-interface Customer {
-  id: string;
-  name: string;
-  mobile: string;
-  doorNumber?: string;
-  floor?: string;
-  street?: string;
-  area?: string;
-  alternateContacts?: string[];
-  advanceAmount?: number;
-  canHolding?: number;
-  extraCanHolding?: number;
-  balance?: number;
-  customerType?: string;
-}
-
 interface CustomersListScreenProps {
   allowCustomerDelete?: boolean;
+  userRole?: 'owner' | 'employee';
+  isAdmin?: boolean;
 }
 
-export default function CustomersListScreen({ allowCustomerDelete = false }: CustomersListScreenProps) {
+export default function CustomersListScreen({
+  allowCustomerDelete = false,
+  userRole = 'employee',
+  isAdmin = false,
+}: CustomersListScreenProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showOrderPage, setShowOrderPage] = useState(false);
   const [orderCustomer, setOrderCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Stock[]>([]);
   const [orderProduct, setOrderProduct] = useState<Stock | null>(null);
@@ -81,6 +72,10 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
 
   useEffect(() => {
     const handleBackPress = () => {
+      if (showOrderPage) {
+        handleCloseOrderModal();
+        return true;
+      }
       if (selectedCustomer) {
         setSelectedCustomer(null);
         return true;
@@ -91,7 +86,7 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => backHandler.remove();
-  }, []);
+  }, [selectedCustomer, showOrderPage]);
 
   useEffect(() => {
     filterCustomers();
@@ -219,21 +214,25 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
   };
 
   const getFilteredProducts = (customer: Customer) => {
-    const isResidence = customer.customerType?.toLowerCase() === 'residence';
-    
+    const type = customer.customerType?.toLowerCase();
+    const isResidence = type === 'residence';
+    const isShop = type === 'shop';
+    const isParty = type === 'party';
+
     const filtered = products.filter((product) => {
       const name = product.productName.toLowerCase();
-      
-      // If customer is Residence, exclude 20L-P (party)
-      if (isResidence && name.includes('20') && name.includes('party')) {
+
+      // For residences and shops we never show the party 20L can
+      if ((isResidence || isShop) && name.includes('20') && name.includes('party')) {
         return false;
       }
-      
-      // If customer is NOT Residence (Shop or Party), exclude regular 20L
-      if (!isResidence && name.includes('20') && name.includes('liter') && !name.includes('party')) {
+
+      // For party customers we treat them as only interested in the party can,
+      // so hide the regular 20L bottle if the name is 20L non‑party.
+      if (isParty && name.includes('20') && name.includes('liter') && !name.includes('party')) {
         return false;
       }
-      
+
       return true;
     });
 
@@ -248,30 +247,42 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
     setSubmittingOrder(false);
     
     // Set default product based on customer type
-    const isResidence = customer.customerType?.toLowerCase() === 'residence';
+    const type = customer.customerType?.toLowerCase();
+    const isResidence = type === 'residence';
+    const isShop = type === 'shop';
+    const isParty = type === 'party';
+
     const defaultProduct = products.find((product) => {
       const name = product.productName.toLowerCase();
-      
-      // For Residence, default to 20L
-      if (isResidence && name.includes('20') && name.includes('liter') && !name.includes('party')) {
+
+      // Residences and shops default to regular 20L
+      if ((isResidence || isShop) && name.includes('20') && name.includes('liter') && !name.includes('party')) {
         return true;
       }
-      
-      // For Shop/Party, default to 20L-P
-      if (!isResidence && name.includes('20') && name.includes('party')) {
+
+      // Party customers default to the party 20L can
+      if (isParty && name.includes('20') && name.includes('party')) {
         return true;
       }
-      
+
       return false;
     });
     
     setOrderProduct(defaultProduct || (products.length > 0 ? products[0] : null));
     setOrderQuantity('1');
-    setShowOrderModal(true);
+
+    if (userRole === 'employee' && !isAdmin) {
+      setShowOrderPage(true);
+      setShowOrderModal(false);
+    } else {
+      setShowOrderModal(true);
+      setShowOrderPage(false);
+    }
   };
 
   const handleCloseOrderModal = () => {
     setShowOrderModal(false);
+    setShowOrderPage(false);
     setOrderCustomer(null);
     setOrderProduct(products.length > 0 ? products[0] : null);
     setOrderQuantity('1');
@@ -334,7 +345,8 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
       };
       
       // Add order to Firebase
-      const result = await addOrder(orderData);
+      orderData.customerId = orderData.customerId || '';
+      const result = await addOrder(orderData as any);
       
       if (result === true) {
         // Update sales record
@@ -418,7 +430,92 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
 
   return (
     <View style={styles.container}>
-      {historyCustomer ? (
+      {showOrderPage && orderCustomer ? (
+        <View style={styles.detailsContainer}>
+          <View style={styles.pageHeader}>
+            <TouchableOpacity onPress={handleCloseOrderModal} style={styles.pageBackButton}>
+              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.gray[800]} />
+            </TouchableOpacity>
+            <Text style={styles.pageHeaderTitle}>Add Order</Text>
+            <View style={styles.pageHeaderSpacer} />
+          </View>
+
+          <ScrollView
+            style={styles.pageContent}
+            contentContainerStyle={{ paddingBottom: spacing[24] }}
+            keyboardShouldPersistTaps="always"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.customerInfoSection}>
+              <Text style={styles.customerNameModal}>{orderCustomer.name}</Text>
+              <Text style={styles.customerAddressModal}>{getFullAddress(orderCustomer)}</Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Product *</Text>
+              {loadingProducts ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                  <Text style={styles.loadingText}>Loading products...</Text>
+                </View>
+              ) : products.length === 0 ? (
+                <Text style={styles.noProductsText}>No products available</Text>
+              ) : (
+                <View style={styles.productSelector}>
+                  {getFilteredProducts(orderCustomer).map((product) => (
+                    <TouchableOpacity
+                      key={product.id}
+                      style={[
+                        styles.productButton,
+                        orderProduct?.id === product.id && styles.productButtonActive,
+                      ]}
+                      onPress={() => setOrderProduct(product)}
+                      disabled={submittingOrder}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.productButtonContent}>
+                        <Text
+                          style={[
+                            styles.productButtonText,
+                            orderProduct?.id === product.id && styles.productButtonTextActive,
+                          ]}
+                        >
+                          {formatProductName(product.productName)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.modalLabel}>Quantity *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter quantity"
+                placeholderTextColor={colors.gray[400]}
+                value={orderQuantity}
+                onChangeText={setOrderQuantity}
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                editable={!submittingOrder}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitButton, (submittingOrder || !orderProduct) && styles.submitButtonDisabled]}
+              onPress={handleSubmitOrder}
+              disabled={submittingOrder || !orderProduct || !orderQuantity || parseInt(orderQuantity) <= 0}
+            >
+              {submittingOrder ? (
+                <ActivityIndicator color={colors.bg.white} size="small" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Order</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      ) : historyCustomer ? (
         <View style={styles.detailsContainer}>
           <CustomerPurchaseHistoryScreen
             customer={historyCustomer}
@@ -429,11 +526,15 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
         <View style={styles.detailsContainer}>
           {selectedCustomer.id?.includes('edit-') ? (
             <EditCustomerScreen
-              customer={{ ...selectedCustomer, id: selectedCustomer.id?.replace('edit-', '') || '' }}
+              customer={
+                ({ ...selectedCustomer, id: selectedCustomer.id?.replace('edit-', '') || '' } as Customer)
+              }
               onBack={() => setSelectedCustomer(null)}
-              onSave={(updatedCustomer) => {
+              onSave={(updatedCustomer: Customer) => {
                 setCustomers((prev) =>
-                  prev.map((c) => (c.id === updatedCustomer.id ? updatedCustomer : c))
+                  prev.map((c) =>
+                    c.id === updatedCustomer.id ? (updatedCustomer as Customer) : c
+                  )
                 );
                 setSelectedCustomer(updatedCustomer);
               }}
@@ -497,7 +598,7 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
             <FlatList
               data={filteredCustomers}
               renderItem={renderCustomerCard}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.id || ''}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               refreshControl={
@@ -510,7 +611,7 @@ export default function CustomersListScreen({ allowCustomerDelete = false }: Cus
 
       {/* Add Order Modal */}
       <Modal
-        visible={showOrderModal}
+        visible={showOrderModal && !(userRole === 'employee' && !isAdmin)}
         transparent
         animationType="fade"
         onRequestClose={handleCloseOrderModal}
@@ -627,6 +728,34 @@ const styles = StyleSheet.create({
   },
   detailsContainer: {
     flex: 1,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[12],
+    backgroundColor: colors.bg.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pageBackButton: {
+    padding: spacing[8],
+    marginLeft: -spacing[8],
+  },
+  pageHeaderTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[800],
+  },
+  pageHeaderSpacer: {
+    width: 40,
+  },
+  pageContent: {
+    flex: 1,
+    backgroundColor: colors.bg.light,
+    paddingHorizontal: spacing[16],
+    paddingTop: spacing[16],
   },
   searchContainer: {
     flexDirection: 'row',

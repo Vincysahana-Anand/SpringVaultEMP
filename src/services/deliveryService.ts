@@ -209,8 +209,8 @@ export async function completeDeliveryTransaction(
           deliveredCans: Number(existing.deliveredCans || 0) + (isDeliveredCan ? fullBottlesDelivered : 0),
           emptyCollected: Number(existing.emptyCollected || 0) + emptyBottlesCollected,
           pendingPaymentReceived: Number(existing.pendingPaymentReceived || 0) + pendingPaymentReceived,
-          cashBillsPayment: Number(existing.cashBillsPayment || 0) + 0,
-          onlineBillsPayment: Number(existing.onlineBillsPayment || 0) + 0,
+          cashBillsPayment: Number(existing.cashBillsPayment || 0) + (paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0),
+          onlineBillsPayment: Number(existing.onlineBillsPayment || 0) + (paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0),
           emptyReturned: Number(existing.emptyReturned || 0) + 0,
         };
         tx.set(salesRef, updated, { merge: true });
@@ -225,8 +225,8 @@ export async function completeDeliveryTransaction(
           deliveredCans: isDeliveredCan ? fullBottlesDelivered : 0,
           emptyCollected: emptyBottlesCollected,
           pendingPaymentReceived,
-          cashBillsPayment: 0,
-          onlineBillsPayment: 0,
+          cashBillsPayment:  (paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0),
+          onlineBillsPayment:  (paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0),
           emptyReturned: 0,
         };
         tx.set(salesRef, newRec, { merge: true });
