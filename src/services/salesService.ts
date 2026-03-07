@@ -11,6 +11,10 @@ export interface SalesRecord {
   delivered: number;
   deliveredCans: number;
   emptyCollected: number;
+  /** value entered when closing today's sale */
+  cashSubmitted?: number;
+  /** vault cash total at time of close */
+  vaultCash?: number;
   pendingPaymentReceived?: number;
   ordersCount?: number;
   deliveredCount?: number;
@@ -188,5 +192,31 @@ export const addExpenseToSales = async (amount: number): Promise<true | ServiceE
     return true;
   } catch (error) {
     return handleServiceError(error, 'addExpenseToSales');
+  }
+};
+
+/**
+ * Record cash amount submitted when closing today's sale.
+ * This writes or updates the day's sales document with a cashSubmitted field.
+ */
+export const submitCashForToday = async (
+  amount: number,
+  vaultCash?: number,
+): Promise<true | ServiceError> => {
+  try {
+    const db = getFirestore();
+    const dateString = getISTDateString();
+    const salesDocRef = doc(collection(db, 'sales'), dateString);
+
+    // build payload with optional vaultCash
+    const payload: any = { cashSubmitted: amount };
+    if (vaultCash !== undefined) payload.vaultCash = vaultCash;
+
+    // merge so existing document is preserved
+    await setDoc(salesDocRef, payload, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Error in submitCashForToday:', error);
+    return handleServiceError(error, 'submitCashForToday');
   }
 };

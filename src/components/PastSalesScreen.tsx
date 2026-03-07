@@ -77,7 +77,9 @@ export default function PastSalesScreen({ onBack }: Props) {
     const totalSale = data.totalSale || 0;
     const pendingPaymentsReceived = (data.pendingPaymentReceived || 0) + cashBillsPayment + onlineBillsPayment;
     const inHandCash = cashPayment + cashBillsPayment - expense;
-    return { cashPayment, onlinePayment, cashBillsPayment, onlineBillsPayment, expense, totalSale, pendingPaymentsReceived, inHandCash };
+    const cashSubmitted = data.cashSubmitted || 0;
+    const vaultCash = data.vaultCash || 0;
+    return { cashPayment, onlinePayment, cashBillsPayment, onlineBillsPayment, expense, totalSale, pendingPaymentsReceived, inHandCash, cashSubmitted, vaultCash };
   }, [sales]);
 
   const dateLabel = useMemo(() => formatDisplayDate(selectedDate), [selectedDate]);
@@ -176,6 +178,8 @@ export default function PastSalesScreen({ onBack }: Props) {
               <SalesStat label="Total sale" value={salesTotals.totalSale} bold />
               <SalesStat label="Pending payments received" value={salesTotals.pendingPaymentsReceived} highlight />
               <SalesStat label="In-hand cash" value={salesTotals.inHandCash} highlight />
+              <SalesStat label="Cash submitted" value={salesTotals.cashSubmitted || 0} highlight />
+              <SalesStat label="Vault cash" value={salesTotals.vaultCash || 0} highlight />
             </View>
           ) : (
             <Text style={styles.empty}>No sales found</Text>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator,
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { addExpense } from '../services/expenseService';
 import { addExpenseToSales } from '../services/salesService';
+import { getVaultRecord, setVaultRecord, VaultRecord } from '../services/vaultService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
@@ -15,9 +16,11 @@ const colors = {
   bg: { white: '#ffffff', light: '#f5f7fa' },
 };
 
-const TYPES = ['Petrol', 'Diesel', 'Food', 'Salary', 'Load', 'Loan', 'Other'];
+const TYPES = ['Shop Rent', 'Withdraw', 'Petrol', 'Diesel', 'Food', 'Salary', 'Load', 'Loan', 'Other'];
 
 const typeIcons: { [key: string]: string } = {
+  'Shop Rent': 'store',
+  'Withdraw': 'bank-minus',
   'Petrol': 'gas-cylinder',
   'Diesel': 'gas-cylinder',
   'Food': 'food',
@@ -28,6 +31,8 @@ const typeIcons: { [key: string]: string } = {
 };
 
 const typeIconColors: { [key: string]: string } = {
+  'Shop Rent': '#6366f1',
+  'Withdraw': '#dc2626',
   'Petrol': '#f59e0b',
   'Diesel': '#d97706',
   'Food': '#ef4444',
@@ -65,6 +70,26 @@ export default function AddExpenseScreen({ onBack }: { onBack: () => void }) {
         setSaving(false);
         return;
       }
+
+      // adjust vault depending on type
+      try {
+        const vaultRec = await getVaultRecord();
+        if (vaultRec && !(vaultRec as any).code) {
+          const rec = vaultRec as VaultRecord;
+          let newCash = rec.cash || 0;
+          let newOnline = rec.online || 0;
+          if (selectedType === 'Withdraw' || selectedType === 'Shop Rent') {
+            newOnline = newOnline - amt;
+          } else {
+            newCash = newCash - amt;
+          }
+          const newTotal = newCash + newOnline;
+          await setVaultRecord({ cash: newCash, online: newOnline, total: newTotal });
+        }
+      } catch (e) {
+        console.error('Error updating vault for expense', e);
+      }
+
       const salesRes = await addExpenseToSales(amt);
       if (salesRes !== true) {
         const err = handleServiceError(salesRes, 'addExpenseToSales');

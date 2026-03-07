@@ -8,18 +8,24 @@ import {
   BackHandler,
   RefreshControl,
   TouchableOpacity,
+  TextInput,
+  Platform,
+  Modal,
+  KeyboardAvoidingView,
+  Pressable,
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAuth, signOut } from '@react-native-firebase/auth';
 import { getFirestore, collection, query, where, getDocs, limit } from '@react-native-firebase/firestore';
 import { handleServiceError } from '../services/serviceErrorWrapper';
-import { showError } from '../shared/feedback/messageBus';
+import { showError, showSuccess } from '../shared/feedback/messageBus';
 import { getOrders } from '../services/orderService';
 import { getCustomers } from '../services/customerService';
 import { getStocks } from '../services/stockService';
 import { getISTDate } from '../utils/dateUtils';
-import { getSalesRecord } from '../services/salesService';
+import { getSalesRecord, submitCashForToday, SalesRecord } from '../services/salesService';
+import { getVaultRecord, setVaultRecord, VaultRecord } from '../services/vaultService';
 import { getExpenses } from '../services/expenseService';
 import { StatCard } from '../shared/components/StatCard';
 import { MenuItem } from '../shared/components/MenuItem';
@@ -48,6 +54,7 @@ import PartyOrdersScreen from './PartyOrdersScreen';
 const logo = require('../assets/banner.png');
 
 export default function EmployeeDashboard() {
+  const userRole: 'owner' | 'employee' = 'employee';
   const [stats, setStats] = useState({
     ordersToday: 0,
     deliveredToday: 0,
@@ -60,6 +67,7 @@ export default function EmployeeDashboard() {
     pendingPaymentsReceived: 0,
     expense: 0,
     inHandCash: 0,
+    vaultCash: 0,
     stockTotal: 0,
     stock20L: 0,
     stock20LEmpty: 0,
@@ -81,6 +89,12 @@ export default function EmployeeDashboard() {
     today.setHours(0, 0, 0, 0);
     return today;
   });
+  const snapshotLabel = useMemo(() => {
+    return snapshotDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }, [snapshotDate]);
+  const [showCloseSalePage, setShowCloseSalePage] = useState(false);
+  const [showCloseSaleModal, setShowCloseSaleModal] = useState(false);
+  const [closeCash, setCloseCash] = useState('');
 
   useEffect(() => {
     fetchUserProfile();
@@ -181,12 +195,13 @@ export default function EmployeeDashboard() {
       today.setHours(0, 0, 0, 0);
       setSnapshotDate(today);
 
-      const [ordersResult, salesResult, stocksResult, customersResult, expensesResult] = await Promise.all([
+      const [ordersResult, salesResult, stocksResult, customersResult, expensesResult, vaultResult] = await Promise.all([
         getOrders(),
         getSalesRecord(formatDateKey(today)),
         getStocks(),
         getCustomers(),
         getExpenses({ type: 'today' }),
+        getVaultRecord(),
       ]);
 
       const orders = Array.isArray(ordersResult) ? ordersResult : [];
@@ -244,7 +259,14 @@ export default function EmployeeDashboard() {
       const onlinePayment = (sales?.onlinePayment || 0) + (sales?.onlineBillsPayment || 0) || 0;
       const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0);
       const expenseValue = expenseTotal || sales?.expense || 0;
-      const inHandCash = cashPayment +  (sales?.cashBillsPayment || 0) - expenseValue;
+      // vault cash overrides in-hand calculation
+      let computedInHand = cashPayment +  (sales?.cashBillsPayment || 0) - expenseValue;
+      let vaultCash = 0;
+      if (vaultResult && !(vaultResult as any).code) {
+        vaultCash = (vaultResult as any).cash || 0;
+        computedInHand = vaultCash;
+      }
+      const inHandCash = computedInHand;
 
       const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20') || s.productName?.toLowerCase().includes('20l'));
       const stock20LEmpty = stock20L?.empty || 0;
@@ -264,6 +286,8 @@ export default function EmployeeDashboard() {
         pendingPaymentsReceived,
         expense: expenseValue,
         inHandCash,
+        // optional vaultCash available separately if needed
+        vaultCash: vaultCash,
         stockTotal: totalStock,
         stock20L: stock20LQty,
         stock20LEmpty,
@@ -326,14 +350,6 @@ export default function EmployeeDashboard() {
       <View style={{ gap: 12 }}>
         <TouchableOpacity
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
-          onPress={() => handleNavigate('partyOrders')}
-        >
-          <MaterialCommunityIcons name="account-group-outline" size={20} color="#0ea5e9" />
-          <Text style={{ color: '#0ea5e9', fontWeight: '700' }}>Party Orders</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
           onPress={() => handleNavigate('counterSale')}
         >
           <MaterialCommunityIcons name="cart-outline" size={20} color="#0ea5e9" />
@@ -388,27 +404,65 @@ export default function EmployeeDashboard() {
       }
     };
 
-    const snapshotLabel = useMemo(() => {
-      return snapshotDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    }, [snapshotDate]);
+  const handleCloseSale = async () => {
+    const cashVal = parseInt(closeCash, 10) || 0;
+    // vault update using latest sales numbers (needed to compute vaultCash value)
+    let vaultCashVal: number | undefined;
+    try {
+      const salesRes = await getSalesRecord();
+      if (salesRes && !(salesRes as any).code) {
+        const sales = salesRes as SalesRecord;
+        const vaultRec = await getVaultRecord();
+        if (vaultRec && !(vaultRec as any).code) {
+          const existingCash = (vaultRec as VaultRecord).cash || 0;
+          const existingOnline = (vaultRec as VaultRecord).online || 0;
+          const cashIncrement = sales.cashPayment + (sales.cashBillsPayment || 0);
+          const onlineIncrement = sales.onlinePayment + (sales.onlineBillsPayment || 0);
+          const newCash = existingCash + cashIncrement;
+          const newOnline = existingOnline + onlineIncrement;
+          const total = newCash + newOnline;
+          await setVaultRecord({ cash: newCash, online: newOnline, total });
+          vaultCashVal = newCash;
+        }
+      }
+    } catch (e) {
+      console.error('Error updating vault after close sale', e);
+    }
 
-    return (
-      <SafeAreaView style={styles.container}>
-        <EdgeIndicator />
-        <DropletLoader visible={signingOut} />
-        <DrawerLayout
-          drawerOpen={drawerOpen}
-          onDrawerOpen={openDrawer}
-          onDrawerClose={closeDrawer}
-          drawerContent={drawerMenuContent}
-          drawerFooter={drawerFooter}
-          drawerLogo={logo}
-          onTabChange={handleTabChange}
-          tabButtons={tabButtonsConfig.map((tab) => ({
-            ...tab,
-            isActive: activeTab === tab.label,
-          }))}
-        >
+    // submit cash after vault updated so we can include vaultCash
+    try {
+      const res = await submitCashForToday(cashVal, vaultCashVal);
+      if (res === true) {
+        showSuccess(`Marked ₹${cashVal} cash for today's sale`);
+      } else {
+        const err = res as any;
+        showError(err.message || 'Failed to submit cash');
+      }
+    } catch (e) {
+      showError('Unexpected error submitting cash');
+    }
+
+    setCloseCash('');
+    setShowCloseSalePage(false);
+  };
+  
+  return (
+    <SafeAreaView style={styles.container}>
+      <EdgeIndicator />
+      <DropletLoader visible={signingOut} />
+      <DrawerLayout
+        drawerOpen={drawerOpen}
+        onDrawerOpen={openDrawer}
+        onDrawerClose={closeDrawer}
+        drawerContent={drawerMenuContent}
+        drawerFooter={drawerFooter}
+        drawerLogo={logo}
+        onTabChange={handleTabChange}
+        tabButtons={tabButtonsConfig.map((tab) => ({
+          ...tab,
+          isActive: activeTab === tab.label,
+        }))}
+      >
           {currentScreen === 'customers' ? (
             <CustomersListScreen allowCustomerDelete={false} userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'partyOrders' ? (
@@ -505,8 +559,40 @@ export default function EmployeeDashboard() {
             <CustomerPurchaseHistoryScreen
               customer={{ id: COUNTER_SALES_CUSTOMER_ID, name: COUNTER_SALES_CUSTOMER_NAME }}
               onBack={() => setCurrentScreen('counterSale')}
-            />
-          ) : (
+            />          ) : showCloseSalePage ? (
+            <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <TouchableOpacity onPress={() => setShowCloseSalePage(false)} style={{ padding: 6, marginRight: 6 }}>
+                  <MaterialCommunityIcons name="arrow-left" size={20} color="#0f172a" />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 18, fontWeight: '700' }}>Close Today's Sale</Text>
+              </View>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 6 }}>Cash</Text>
+                <TextInput
+                  style={{ backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#e2e8f0', color: '#0f172a' }}
+                  value={closeCash}
+                  onChangeText={setCloseCash}
+                  placeholder="₹"
+                  keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setShowCloseSalePage(false)}
+                  style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#475569', fontWeight: '600' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleCloseSale}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, backgroundColor: '#0ea5e9' }}
+                >
+                  <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>          ) : (
             <ScrollView
               style={styles.content}
               showsVerticalScrollIndicator={false}
@@ -561,7 +647,7 @@ export default function EmployeeDashboard() {
                 </View>
                 <View style={styles.statsRow}>
                   <StatCard icon="chart-line" label="Expense" value={currencyINR(stats.expense)} bgColor="#fff5f5" />
-                  <StatCard icon="wallet" label="In-hand cash" value={currencyINR(stats.inHandCash)} bgColor="#ecfeff" />
+                  <StatCard icon="wallet" label="Vault cash" value={currencyINR(stats.inHandCash)} bgColor="#ecfeff" />
                 </View>
               </View>
 
@@ -590,8 +676,90 @@ export default function EmployeeDashboard() {
               </View>
 
               <View style={{ height: 24 }} />
+          {/* button visible for owner and employee both; action depends on admin status */}
+          <TouchableOpacity
+            style={{
+              marginTop: 20,
+              paddingVertical: 12,
+              borderRadius: 10,
+              backgroundColor: '#0ea5e9',
+              alignItems: 'center',
+              marginBottom: 20,
+            }}
+            onPress={() => {
+              // mirror condition used elsewhere for page/modal decision
+              if (userRole === 'employee' && !isAdmin) {
+                setShowCloseSalePage(true);
+                setShowCloseSaleModal(false);
+              } else {
+                setShowCloseSaleModal(true);
+                setShowCloseSalePage(false);
+              }
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Close Today's Sale</Text>
+          </TouchableOpacity>
             </ScrollView>
           )}
+
+          {/* Close today's sale modal for admins/owners */}
+          <Modal
+            visible={showCloseSaleModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowCloseSaleModal(false)}
+          >
+            <KeyboardAvoidingView
+              style={styles.flex1}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+              <Pressable style={styles.modalOverlay} onPress={() => setShowCloseSaleModal(false)}>
+                <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                  {/* header matches other modals */}
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Close Today's Sale</Text>
+                    <TouchableOpacity onPress={() => setShowCloseSaleModal(false)} style={styles.modalCloseButton}>
+                      <MaterialCommunityIcons name="close" size={24} color="#475569" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView
+                    style={styles.modalScrollView}
+                    contentContainerStyle={styles.modalScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <View style={{ marginBottom: 14 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 6 }}>Cash</Text>
+                      <TextInput
+                        style={{ backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#e2e8f0', color: '#0f172a' }}
+                        value={closeCash}
+                        onChangeText={setCloseCash}
+                        placeholder="₹"
+                        keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+                      />
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => setShowCloseSaleModal(false)}
+                        style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', alignItems: 'center' }}
+                      >
+                        <Text style={{ color: '#475569', fontWeight: '600' }}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={handleCloseSale}
+                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, backgroundColor: '#0ea5e9' }}
+                      >
+                        <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </Pressable>
+              </Pressable>
+            </KeyboardAvoidingView>
+          </Modal>
         </DrawerLayout>
       </SafeAreaView>
     );
@@ -673,5 +841,43 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginTop: 4,
     marginBottom: 0,
+  },
+  flex1: {
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalScrollView: {
+    // allow scrolling if content grows
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
   },
 });
