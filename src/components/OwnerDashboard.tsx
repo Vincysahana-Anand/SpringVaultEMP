@@ -247,9 +247,9 @@ export default function OwnerDashboard() {
       const pendingDeliveries = openOrders.length;
 
       const saleTotal = sales?.totalSale || 0;
-      const cashPayment = sales?.cashPayment || 0;
-      const onlinePayment = sales?.onlinePayment || 0;
-      const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) + (sales?.onlineBillsPayment || 0);
+      const cashPayment = (sales?.cashPayment || 0) + (sales?.cashBillsPayment || 0) || 0;
+      const onlinePayment = (sales?.onlinePayment || 0) + (sales?.onlineBillsPayment || 0) || 0;
+      const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0);
       const expenseValue = expenseTotal || sales?.expense || 0;
       const inHandCash = cashPayment + (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) - expenseValue;
 

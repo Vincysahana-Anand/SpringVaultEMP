@@ -538,6 +538,8 @@ export default function CustomersListScreen({
                 );
                 setSelectedCustomer(updatedCustomer);
               }}
+              userRole={userRole}
+              isAdmin={isAdmin}
             />
           ) : (
             <CustomerDetailsScreen

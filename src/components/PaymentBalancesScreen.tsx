@@ -911,18 +911,19 @@ export default function PaymentBalancesScreen({ onBack, userRole = 'employee', i
       const cashPaidValue = payMethod === 'cash' ? amountValue : 0;
       const onlinePaidValue = payMethod === 'online' ? amountValue : 0;
       await updateSalesRecord(
-        0,
-        0,
-        0,
-        0,
-        0,
-        false,
-        0,
-        0,
-        0,
-        0,
-        cashPaidValue,
-        onlinePaidValue
+        0, //deliveredQty
+        0, //emptyQty
+        0, //cashPaidValue
+        0, //onlinePaidValue
+        0, //billAmount
+        false, //isDeliveredCan
+        0, //saleAmount
+        amountValue, //pendingPaymentReceived
+        0, //ordersCount
+        0, //deliveredCount
+        cashPaidValue, //cashBillsPayment
+        onlinePaidValue, //onlineBillsPayment
+        0 //emptyReturned
       );
 
       // 4) Add daily record under Payments doc
@@ -1004,6 +1005,8 @@ export default function PaymentBalancesScreen({ onBack, userRole = 'employee', i
               );
               setSelectedCustomer(updatedCustomer);
             }}
+            userRole={userRole}
+            isAdmin={isAdmin}
           />
         ) : (
           <CustomerDetailsScreen

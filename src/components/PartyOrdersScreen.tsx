@@ -1209,6 +1209,8 @@ export default function PartyOrdersScreen({
                 );
                 setSelectedCustomer(updatedCustomer);
               }}
+              userRole={userRole}
+              isAdmin={isAdmin}
             />
           ) : (
             <CustomerDetailsScreen

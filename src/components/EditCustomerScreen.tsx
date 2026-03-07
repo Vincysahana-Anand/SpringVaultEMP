@@ -21,9 +21,11 @@ interface EditCustomerScreenProps {
   customer: Customer;
   onBack: () => void;
   onSave: (updatedCustomer: Customer) => void;
+  userRole?: 'owner' | 'employee';
+  isAdmin?: boolean;
 }
 
-export default function EditCustomerScreen({ customer, onBack, onSave }: EditCustomerScreenProps) {
+export default function EditCustomerScreen({ customer, onBack, onSave, userRole = 'employee', isAdmin = false }: EditCustomerScreenProps) {
   const [formData, setFormData] = useState<Customer>(customer);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -338,7 +340,7 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
             value={(formData.balance ?? 0).toString()}
             onChangeText={(value) => updateField('balance', value ? parseInt(value) : 0)}
             keyboardType="decimal-pad"
-            editable={!loading}
+            editable={!loading && !(userRole === 'employee' && !isAdmin)}
           />
         </View>
 
@@ -367,7 +369,7 @@ export default function EditCustomerScreen({ customer, onBack, onSave }: EditCus
             value={formData.extraCanHolding?.toString() || ''}
             onChangeText={(value) => updateField('extraCanHolding', value ? parseInt(value) : 0)}
             keyboardType="decimal-pad"
-            editable={!loading}
+            editable={!loading && !(userRole === 'employee' && !isAdmin)}
           />
         </View>
 

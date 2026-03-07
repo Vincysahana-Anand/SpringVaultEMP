@@ -305,6 +305,8 @@ export default function ExtraCanHoldingsScreen({ onBack, userRole = 'employee', 
               );
               setSelectedCustomer(updatedCustomer);
             }}
+            userRole={userRole}
+            isAdmin={isAdmin}
           />
         ) : (
           <CustomerDetailsScreen
