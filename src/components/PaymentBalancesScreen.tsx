@@ -1620,12 +1620,7 @@ export default function PaymentBalancesScreen({ onBack, userRole = 'employee', i
             <View style={styles.billActionRow}>
               <TouchableOpacity style={styles.billActionBtn} onPress={() => startBillAction('image')}>
                 <MaterialCommunityIcons name="image-outline" size={20} color="#0ea5e9" />
-                <Text style={styles.billActionText}>Image</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.billActionBtn} onPress={() => startBillAction('print')}>
-                <MaterialCommunityIcons name="printer-outline" size={20} color="#16a34a" />
-                <Text style={styles.billActionText}>Print</Text>
+                <Text style={styles.billActionText}>Share</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

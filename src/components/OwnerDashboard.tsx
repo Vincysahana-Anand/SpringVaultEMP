@@ -251,7 +251,7 @@ export default function OwnerDashboard() {
       const onlinePayment = (sales?.onlinePayment || 0) + (sales?.onlineBillsPayment || 0) || 0;
       const pendingPaymentsReceived = (sales?.pendingPaymentReceived || 0);
       const expenseValue = expenseTotal || sales?.expense || 0;
-      const inHandCash = cashPayment + (sales?.pendingPaymentReceived || 0) + (sales?.cashBillsPayment || 0) - expenseValue;
+      const inHandCash = cashPayment + (sales?.cashBillsPayment || 0) - expenseValue;
 
       const stock20L = stocks.find((s) => s.id === '20L_CAN' || s.productName?.toLowerCase().includes('20') || s.productName?.toLowerCase().includes('20l'));
       const stock20LEmpty = stock20L?.empty || 0;
