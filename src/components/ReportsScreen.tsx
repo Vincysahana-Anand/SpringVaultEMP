@@ -415,8 +415,7 @@ export default function ReportsScreen({ onBack, userRole = 'employee', isAdmin =
       totals.cash +
       totals.online +
       totals.cashBills +
-      totals.onlineBills +
-      totals.pendingReceived
+      totals.onlineBills 
     );
   }, [totals]);
 
