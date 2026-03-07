@@ -576,6 +576,22 @@ export default function OwnerDashboard() {
           </View>
           <View style={styles.statsGrid}>
             <View style={styles.statsRow}>
+              <StatCard icon="playlist-check" label="Pending deliveries" value={stats.pendingDeliveries} />
+              <StatCard icon="truck-delivery" label="Delivered today" value={stats.deliveredToday} />
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard icon="bottle-soda" label="Delivered cans" value={stats.deliveredCans} />
+              <StatCard icon="bottle-wine" label="Empty collected" value={stats.emptyCollected} />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Sales & Cash</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statsRow}>
+              <StatCard icon="cash-plus" label="Cash payments" value={currencyINR(stats.cashPayment)} />
+              <StatCard icon="credit-card" label="Online payments" value={currencyINR(stats.onlinePayment)} />
+            </View>
+            <View style={styles.statsRow}>
               <StatCard icon="cash" label="Sale" value={currencyINR(stats.sale)} bgColor="#f0fdf4" />
               <StatCard icon="hand-coin" label="Pending received" value={currencyINR(stats.pendingPaymentsReceived)} bgColor="#f5f3ff" />
             </View>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, BackHandler, Platform } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { addCustomer } from '../services/customerService';
+import { addCustomer, getCustomers } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
 
@@ -49,6 +49,33 @@ export default function AddCustomerScreen({ onBack }: Props) {
     if (isNaN(priceVal) || priceVal < 0) {
       showError('Enter a valid price', { title: 'Validation' });
       return;
+    }
+
+    // check for existing customer by mobile/alternate numbers
+    try {
+      const allCustomers = await getCustomers();
+      if (Array.isArray(allCustomers)) {
+        const primary = mobile.trim();
+        const alternates = alternateContacts
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean);
+        const duplicate = allCustomers.find((c) => {
+          if (c.mobile === primary) return true;
+          if (c.alternateContacts?.includes(primary)) return true;
+          for (const alt of alternates) {
+            if (c.mobile === alt) return true;
+            if (c.alternateContacts?.includes(alt)) return true;
+          }
+          return false;
+        });
+        if (duplicate) {
+          showError('A customer with this mobile number already exists', { title: 'Validation' });
+          return;
+        }
+      }
+    } catch (e) {
+      // ignore errors in duplicate check, will surface on save if any
     }
 
     const isShopOrParty = customerType === 'Shop' || customerType === 'Party';
