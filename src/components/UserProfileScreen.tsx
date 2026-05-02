@@ -30,11 +30,13 @@ import { showError, showSuccess } from '../shared/feedback/messageBus';
 type Props = {
   onBack: () => void;
   allowEdit: boolean;
+  showAdminPageLink?: boolean;
+  onOpenAdminPage?: () => void;
 };
 
 const normalizeEmail = (email: string) => String(email || '').trim().toLowerCase();
 
-export default function UserProfileScreen({ onBack, allowEdit }: Props) {
+export default function UserProfileScreen({ onBack, allowEdit, showAdminPageLink = false, onOpenAdminPage }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -220,6 +222,21 @@ export default function UserProfileScreen({ onBack, allowEdit }: Props) {
           </View>
         </View>
 
+        {showAdminPageLink && onOpenAdminPage ? (
+          <TouchableOpacity style={styles.adminLinkCard} onPress={onOpenAdminPage} activeOpacity={0.9}>
+            <View style={styles.adminLinkLeft}>
+              <View style={styles.adminIconWrap}>
+                <MaterialCommunityIcons name="shield-account-outline" size={20} color={colors.primary[600]} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminLinkTitle}>Admin Page</Text>
+                <Text style={styles.adminLinkSubtitle}>Open owner controls and management tools.</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.gray[500]} />
+          </TouchableOpacity>
+        ) : null}
+
         {!allowEdit ? (
           <View style={styles.hintCard}>
             <MaterialCommunityIcons name="lock-outline" size={18} color={colors.gray[600]} />
@@ -327,6 +344,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[10],
+  },
+  adminLinkCard: {
+    marginTop: spacing[12],
+    backgroundColor: colors.bg.white,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[12],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...elevation.sm,
+  },
+  adminLinkLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[10],
+  },
+  adminIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminLinkTitle: {
+    color: colors.gray[900],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
+  adminLinkSubtitle: {
+    marginTop: 2,
+    color: colors.gray[600],
+    fontSize: typography.fontSize.xs,
   },
   hintText: {
     flex: 1,

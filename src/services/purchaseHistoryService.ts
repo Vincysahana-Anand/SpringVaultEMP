@@ -1,5 +1,5 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, setDoc, updateDoc, doc, arrayUnion } from '@react-native-firebase/firestore';
+import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, setDoc, updateDoc, doc } from '@react-native-firebase/firestore';
 
 export interface PurchaseRecord {
   product: string;
@@ -33,9 +33,11 @@ export const addPurchaseHistory = async (
 
     if (docSnap.exists()) {
       console.log('Customer history exists, updating with new purchase');
-      // Update existing customer history by adding new purchase to array
+      const existingData = docSnap.data() as CustomerPurchaseHistory;
+      const existingPurchases = existingData?.purchases || [];
+      const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
       await updateDoc(purchaseHistoryRef, {
-        purchases: arrayUnion(purchaseRecord),
+        purchases: updatedPurchases,
       });
       console.log('Purchase history updated successfully');
     } else {

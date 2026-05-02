@@ -1,6 +1,5 @@
 import {
   FirebaseFirestoreTypes,
-  arrayUnion,
   addDoc,
   collection,
   deleteDoc,
@@ -233,8 +232,11 @@ export const completePartyDeliveryTransaction = async (
       };
 
       if (purchaseHistorySnap.exists()) {
+        const existingData = purchaseHistorySnap.data() as any;
+        const existingPurchases = (existingData?.purchases as PurchaseRecord[]) || [];
+        const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
         tx.update(purchaseHistoryRef, {
-          purchases: arrayUnion(purchaseRecord),
+          purchases: updatedPurchases,
         });
       } else {
         tx.set(purchaseHistoryRef, {

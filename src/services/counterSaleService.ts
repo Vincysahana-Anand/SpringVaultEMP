@@ -3,7 +3,6 @@ import {
   runTransaction,
   doc,
   collection,
-  arrayUnion,
 } from '@react-native-firebase/firestore';
 
 import { getISTDate } from '../utils/dateUtils';
@@ -144,8 +143,11 @@ export async function completeCounterSaleTransaction(
       };
 
       if (purchaseHistorySnap.exists()) {
+        const existingData = purchaseHistorySnap.data() as any;
+        const existingPurchases = (existingData?.purchases as PurchaseRecord[]) || [];
+        const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
         tx.update(purchaseHistoryRef, {
-          purchases: arrayUnion(purchaseRecord),
+          purchases: updatedPurchases,
         });
       } else {
         tx.set(purchaseHistoryRef, {

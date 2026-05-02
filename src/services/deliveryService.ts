@@ -3,7 +3,7 @@ import {
   runTransaction,
   collection,
   doc,
-  arrayUnion,
+  deleteField,
 } from '@react-native-firebase/firestore';
 
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
@@ -182,8 +182,12 @@ export async function completeDeliveryTransaction(
       };
 
       if (purchaseHistorySnap.exists()) {
+        // keep the latest 20 records only for a customer to prevent unbounded growth
+        const existingData = purchaseHistorySnap.data() as any;
+        const existingPurchases = (existingData?.purchases as PurchaseRecord[]) || [];
+        const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
         tx.update(purchaseHistoryRef, {
-          purchases: arrayUnion(purchaseRecord),
+          purchases: updatedPurchases,
         });
       } else {
         tx.set(purchaseHistoryRef, {
@@ -254,9 +258,33 @@ export async function completeDeliveryTransaction(
 
       if (dailyRecordSnap.exists()) {
         const data = dailyRecordSnap.data() as any;
+        console.log('existing dailyRecordSnap:', dailyRecordSnap);
+        //find the data before 45 days from the dateKey and remove it from the data base only if the order.productId is 20L_CAN 
+        const cutoffDate = new Date(deliveredDate);
+        cutoffDate.setDate(cutoffDate.getDate() - 45);
+        const cutoffDateKey = formatDateKey(cutoffDate);
+        console.log('cutoffDateKey:', cutoffDateKey);
+        const cleanupPayload: Record<string, any> = {};
+        //data befor the cutoff date will be removed only for 20L_CAN product
+        if (order.productId === '20L_CAN') {
+          for (const key in data) {
+            if (key < cutoffDateKey) {
+              console.log('removing daily record for date:', key);
+              cleanupPayload[key] = deleteField();
+            }
+          }
+        }
         const existingEntries = (data?.[dateKey] as DailyRecordEntry[]) || [];
-        tx.set(dailyRecordRef, { [dateKey]: [...existingEntries, dailyRecordEntry] }, { merge: true });
+        tx.set(
+          dailyRecordRef,
+          {
+            ...cleanupPayload,
+            [dateKey]: [...existingEntries, dailyRecordEntry],
+          },
+          { merge: true }
+        );
       } else {
+        console.log('new dailyRecordSnap:', dailyRecordSnap);
         tx.set(dailyRecordRef, { [dateKey]: [dailyRecordEntry] });
       }
 
@@ -295,6 +323,7 @@ export async function completeDeliveryTransaction(
 
     return result;
   } catch (error) {
+    console.log('Error in completeDeliveryTransaction:', error);
     return handleServiceError(error, 'completeDeliveryTransaction');
   }
 }
