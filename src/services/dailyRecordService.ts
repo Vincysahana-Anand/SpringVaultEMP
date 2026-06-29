@@ -2,6 +2,7 @@ import {
   FirebaseFirestoreTypes,
   collection,
   collectionGroup,
+  doc,
   getDocs,
   getFirestore,
   limit,
@@ -14,6 +15,7 @@ import {
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import { DailyRecordEntry } from '../types';
 import { hydrateDailyRecordEntriesWithCustomerData } from './firestoreHistoryMigration';
+import { config } from '../shared/config';
 
 export type { DailyRecordEntry } from '../types';
 
@@ -25,6 +27,56 @@ export type DailyRecordPage = {
   entries: DailyRecordEntry[];
   nextCursor: DailyRecordCursor;
   hasMore: boolean;
+};
+
+const toMillis = (value: unknown): number => {
+  if (!value) return 0;
+
+  if (typeof value === 'object' && value !== null) {
+    const maybeTimestamp = value as { toDate?: () => Date };
+    if (typeof maybeTimestamp.toDate === 'function') {
+      return maybeTimestamp.toDate().getTime();
+    }
+  }
+
+  const asDate = new Date(String(value));
+  return Number.isNaN(asDate.getTime()) ? 0 : asDate.getTime();
+};
+
+const sortByCreatedAtDesc = (entries: DailyRecordEntry[]): DailyRecordEntry[] => {
+  return [...entries].sort((left, right) => {
+    const leftTime = toMillis((left as Record<string, unknown>).createdAt);
+    const rightTime = toMillis((right as Record<string, unknown>).createdAt);
+    return rightTime - leftTime;
+  });
+};
+
+const isMissingIndexError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    maybeError.code === 'firestore/failed-precondition'
+    || String(maybeError.message || '').toLowerCase().includes('query requires an index')
+  );
+};
+
+const getDailyRecordFallbackEntriesByDate = async (
+  db: ReturnType<typeof getFirestore>,
+  date: string,
+): Promise<DailyRecordEntry[]> => {
+  const productIds = config.firestore.dailyRecordProductIds;
+  const snapshots = await Promise.all(
+    productIds.map((productId) => getDocs(
+      query(
+        collection(db, 'dailyRecord', productId, 'entries'),
+        where('date', '==', date),
+      ),
+    )),
+  );
+
+  return snapshots.flatMap((snapshot) => snapshot.docs.map(
+    (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
+  ));
 };
 
 const extractDateFromDeliveredAt = (deliveredAt: string): string => {
@@ -122,22 +174,40 @@ export const getDailyRecordsByDatePage = async (
       constraints.push(startAfter(cursor));
     }
 
-    const entriesQuery = query(collectionGroup(db, 'entries'), ...constraints);
-    const snapshot = await getDocs(entriesQuery);
-    const entries = snapshot.docs.map(
-      (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
-    );
-    const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
-    const lastDoc = snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
-      : null;
-    const hasMore = snapshot.docs.length === cappedPageSize;
+    try {
+      const entriesQuery = query(collectionGroup(db, 'entries'), ...constraints);
+      const snapshot = await getDocs(entriesQuery);
+      const entries = snapshot.docs.map(
+        (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
+      );
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
+      const lastDoc = snapshot.docs.length > 0
+        ? snapshot.docs[snapshot.docs.length - 1]
+        : null;
+      const hasMore = snapshot.docs.length === cappedPageSize;
 
-    return {
-      entries: hydrated,
-      nextCursor: hasMore ? lastDoc : null,
-      hasMore,
-    };
+      return {
+        entries: hydrated,
+        nextCursor: hasMore ? lastDoc : null,
+        hasMore,
+      };
+    } catch (error) {
+      if (!isMissingIndexError(error)) {
+        throw error;
+      }
+
+      console.warn('Missing Firestore index for getDailyRecordsByDatePage; falling back to client-side sorting/paging.');
+
+      const fallbackEntries = await getDailyRecordFallbackEntriesByDate(db, date);
+      const sorted = sortByCreatedAtDesc(fallbackEntries).slice(0, cappedPageSize);
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, sorted);
+
+      return {
+        entries: hydrated,
+        nextCursor: null,
+        hasMore: false,
+      };
+    }
   } catch (error) {
     console.error('Error in getDailyRecordsByDatePage:', error);
     return handleServiceError(error, 'getDailyRecordsByDatePage');
@@ -196,26 +266,51 @@ export const getDailyRecordPage = async (
       constraints.push(startAfter(cursor));
     }
 
-    const entriesQuery = query(
-      collection(db, 'dailyRecord', productId, 'entries'),
-      ...constraints,
-    );
+    try {
+      const entriesQuery = query(
+        collection(db, 'dailyRecord', productId, 'entries'),
+        ...constraints,
+      );
 
-    const snapshot = await getDocs(entriesQuery);
-    const entries = snapshot.docs.map(
-      (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
-    );
-    const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
-    const lastDoc = snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
-      : null;
-    const hasMore = snapshot.docs.length === cappedPageSize;
+      const snapshot = await getDocs(entriesQuery);
+      const entries = snapshot.docs.map(
+        (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
+      );
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
+      const lastDoc = snapshot.docs.length > 0
+        ? snapshot.docs[snapshot.docs.length - 1]
+        : null;
+      const hasMore = snapshot.docs.length === cappedPageSize;
 
-    return {
-      entries: hydrated,
-      nextCursor: hasMore ? lastDoc : null,
-      hasMore,
-    };
+      return {
+        entries: hydrated,
+        nextCursor: hasMore ? lastDoc : null,
+        hasMore,
+      };
+    } catch (error) {
+      if (!isMissingIndexError(error)) {
+        throw error;
+      }
+
+      console.warn('Missing Firestore index for getDailyRecordPage; falling back to client-side sorting/paging.');
+
+      const fallbackQuery = query(
+        collection(db, 'dailyRecord', productId, 'entries'),
+        where('date', '==', date),
+      );
+      const fallbackSnapshot = await getDocs(fallbackQuery);
+      const fallbackEntries = fallbackSnapshot.docs.map(
+        (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
+      );
+      const sorted = sortByCreatedAtDesc(fallbackEntries).slice(0, cappedPageSize);
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, sorted);
+
+      return {
+        entries: hydrated,
+        nextCursor: null,
+        hasMore: false,
+      };
+    }
   } catch (error) {
     console.error('Error in getDailyRecordPage:', error);
     return handleServiceError(error, 'getDailyRecordPage');
