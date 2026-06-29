@@ -13,23 +13,8 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { updateUser, User } from '../services/userService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError, showSuccess, showWarning } from '../shared/feedback/messageBus';
-
-const colors = {
-  primary: { 50: '#f5f7ff', 200: '#d6e4f7', 500: '#5b9eff', 600: '#4a8ce6' },
-  gray: {
-    50: '#fafbfc',
-    100: '#f1f3f7',
-    200: '#e8ecf4',
-    400: '#9ca3b5',
-    600: '#525966',
-    700: '#3a4150',
-    800: '#1e2936',
-  },
-  border: '#d5dce9',
-  bg: { white: '#ffffff', light: '#f5f7fa' },
-  success: '#16a34a',
-  danger: '#ef4444',
-};
+import { colors } from '../shared/theme/theme';
+import { useFormState } from '../shared/hooks/useFormState';
 
 const ROLES = ['Owner', 'Employee', 'Customer'];
 
@@ -40,26 +25,28 @@ type Props = {
 };
 
 export default function EditUserScreen({ user, onBack, onSaved }: Props) {
-  const [name, setName] = useState(user.name || '');
-  const [phone, setPhone] = useState(user.phone || '');
-  const [email, setEmail] = useState(user.email || '');
-  const [role, setRole] = useState<string>(user.role || 'Employee');
+  const { values: form, setValue } = useFormState({
+    name: user.name || '',
+    phone: user.phone || '',
+    email: user.email || '',
+    role: user.role || 'Employee',
+  });
   const [isActive, setIsActive] = useState<boolean>(!!user.isActive);
   const [saving, setSaving] = useState(false);
 
   const userId = user.id || '';
-  const normalizedEmail = useMemo(() => String(email || '').trim().toLowerCase(), [email]);
+  const normalizedEmail = useMemo(() => String(form.email || '').trim().toLowerCase(), [form.email]);
 
   const validate = () => {
     if (!userId) {
       showError('Missing user id', { title: 'Error' });
       return false;
     }
-    if (!name.trim()) {
+    if (!form.name.trim()) {
       showError('Enter name', { title: 'Validation' });
       return false;
     }
-    if (!phone.trim()) {
+    if (!form.phone.trim()) {
       showError('Enter mobile number', { title: 'Validation' });
       return false;
     }
@@ -67,7 +54,7 @@ export default function EditUserScreen({ user, onBack, onSaved }: Props) {
       showError('Enter a valid email', { title: 'Validation' });
       return false;
     }
-    if (!role.trim()) {
+    if (!form.role.trim()) {
       showError('Select role', { title: 'Validation' });
       return false;
     }
@@ -81,12 +68,12 @@ export default function EditUserScreen({ user, onBack, onSaved }: Props) {
     try {
       setSaving(true);
       const res = await updateUser(userId, {
-        name,
-        phone,
+        name: form.name,
+        phone: form.phone,
         email: normalizedEmail,
-        role,
+        role: form.role,
         isActive,
-        isAdmin: role === 'Owner',
+        isAdmin: form.role === 'Owner',
       });
 
       if (res !== true) {
@@ -120,15 +107,15 @@ export default function EditUserScreen({ user, onBack, onSaved }: Props) {
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Name</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={colors.gray[400]} />
+        <TextInput style={styles.input} value={form.name} onChangeText={(v) => setValue('name', v)} placeholder="Full name" placeholderTextColor={colors.gray[400]} />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Mobile</Text>
         <TextInput
           style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
+          value={form.phone}
+          onChangeText={(v) => setValue('phone', v)}
           placeholder="Mobile number"
           placeholderTextColor={colors.gray[400]}
           keyboardType="phone-pad"
@@ -139,8 +126,8 @@ export default function EditUserScreen({ user, onBack, onSaved }: Props) {
         <Text style={styles.label}>Email</Text>
         <TextInput
           style={styles.input}
-          value={email}
-          onChangeText={setEmail}
+          value={form.email}
+          onChangeText={(v) => setValue('email', v)}
           placeholder="Email"
           placeholderTextColor={colors.gray[400]}
           autoCapitalize="none"
@@ -152,8 +139,8 @@ export default function EditUserScreen({ user, onBack, onSaved }: Props) {
         <Text style={styles.label}>Role</Text>
         <View style={styles.badgeRow}>
           {ROLES.map((r) => (
-            <TouchableOpacity key={r} style={[styles.badge, role === r && styles.badgeActive]} onPress={() => setRole(r)}>
-              <Text style={[styles.badgeText, role === r && styles.badgeTextActive]}>{r}</Text>
+            <TouchableOpacity key={r} style={[styles.badge, form.role === r && styles.badgeActive]} onPress={() => setValue('role', r)}>
+              <Text style={[styles.badgeText, form.role === r && styles.badgeTextActive]}>{r}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -168,7 +155,7 @@ export default function EditUserScreen({ user, onBack, onSaved }: Props) {
           <Switch
             value={isActive}
             onValueChange={setIsActive}
-            trackColor={{ false: colors.danger, true: colors.success }}
+            trackColor={{ false: colors.danger[500], true: colors.success[600] }}
             thumbColor="#ffffff"
           />
         </View>
@@ -201,7 +188,7 @@ const styles = StyleSheet.create({
   subLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', marginTop: 2 },
   input: {
     borderWidth: 1,
-    borderColor: '#d5dce9',
+    borderColor: colors.gray[300],
     borderRadius: 10,
     backgroundColor: '#ffffff',
     paddingHorizontal: 12,
@@ -231,7 +218,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#d5dce9',
+    borderColor: colors.gray[300],
     backgroundColor: '#ffffff',
   },
 

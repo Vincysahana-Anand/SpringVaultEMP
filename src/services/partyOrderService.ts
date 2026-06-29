@@ -1,134 +1,46 @@
 import {
-  FirebaseFirestoreTypes,
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  getFirestore,
-  orderBy,
-  query,
   runTransaction,
-  updateDoc,
+  getFirestore,
+  doc,
+  orderBy,
 } from '@react-native-firebase/firestore';
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import { getISTDate } from '../utils/dateUtils';
-import { PurchaseRecord } from './purchaseHistoryService';
+import { getTransactionTimestamp } from '../utils/dateUtils';
+import { DailyRecordEntry, PartyDelivery, PartyOrder, PurchaseRecord } from '../types';
+import { getUnitPriceForPartyOrder } from '../shared/business/pricing';
+import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
+import { createDailyRecordEntryTransaction } from './dailyRecordService';
+import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { createRepository } from './firestoreRepository';
 
-export interface PartyOrder {
-  id?: string;
-  customerId: string;
-  customerName: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  paymentMethod: string;
-  orderedAt?: string;
-  requestedDate?: string;
-  deliveredAt?: string;
-  deliveredQty?: number;
-  address?: string;
-  mobile?: string;
-  timeStamp?: Date;
-}
-
-export interface PartyDelivery {
-  id?: string;
-  customerId: string;
-  customerName: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  deliveredQty?: number;
-  deliveredAt?: string;
-  requestedDate?: string;
-  address?: string;
-  mobile?: string;
-  timeStamp?: Date;
-  paymentMethod?: string;
-  amountPaid?: number;
-}
+export type { PartyOrder, PartyDelivery } from '../types';
 
 export type CompletePartyDeliveryParams = {
   order: PartyOrder;
   deliveredQty: number;
 };
 
-const formatDeliveredAt = (d: Date) => {
-  return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-};
+const partyOrdersRepo = createRepository<PartyOrder>('partyOrders', [orderBy('requestedDate', 'asc')]);
+const partyDeliveriesRepo = createRepository<PartyDelivery>('partyDeliveries', [orderBy('timeStamp', 'desc')]);
 
 export const addPartyOrder = async (order: PartyOrder): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await addDoc(collection(db, 'partyOrders'), order);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'addPartyOrder');
-  }
+  const result = await partyOrdersRepo.add(order);
+  return typeof result === 'string' ? true : result;
 };
 
-export const getPartyOrders = async (): Promise<PartyOrder[] | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const ordersQuery = query(collection(db, 'partyOrders'), orderBy('requestedDate', 'asc'));
-    const snapshot = await getDocs(ordersQuery);
-    return snapshot.docs.map((d: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() } as PartyOrder));
-  } catch (error) {
-    return handleServiceError(error, 'getPartyOrders');
-  }
-};
+export const getPartyOrders = () => partyOrdersRepo.getAll();
 
-export const deletePartyOrder = async (orderId: string): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await deleteDoc(doc(db, 'partyOrders', orderId));
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'deletePartyOrder');
-  }
-};
+export const deletePartyOrder = (orderId: string) => partyOrdersRepo.delete(orderId);
 
-export const updatePartyOrder = async (
-  orderId: string,
-  patch: Partial<PartyOrder>
-): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await updateDoc(doc(db, 'partyOrders', orderId), patch);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'updatePartyOrder');
-  }
-};
+export const updatePartyOrder = (orderId: string, patch: Partial<PartyOrder>) =>
+  partyOrdersRepo.update(orderId, patch);
 
 export const addPartyDelivery = async (delivery: PartyDelivery): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await addDoc(collection(db, 'partyDeliveries'), delivery);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'addPartyDelivery');
-  }
+  const result = await partyDeliveriesRepo.add(delivery);
+  return typeof result === 'string' ? true : result;
 };
 
-export const getPartyDeliveries = async (): Promise<PartyDelivery[] | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const deliveriesQuery = query(collection(db, 'partyDeliveries'), orderBy('timeStamp', 'desc'));
-    const snapshot = await getDocs(deliveriesQuery);
-    return snapshot.docs.map((d: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() } as PartyDelivery));
-  } catch (error) {
-    return handleServiceError(error, 'getPartyDeliveries');
-  }
-};
+export const getPartyDeliveries = () => partyDeliveriesRepo.getAll();
 
 export const completePartyDeliveryTransaction = async (
   params: CompletePartyDeliveryParams
@@ -155,61 +67,42 @@ export const completePartyDeliveryTransaction = async (
 
     const db = getFirestore();
 
-    const deliveredDate = getISTDate();
-    const deliveredAt = formatDeliveredAt(deliveredDate);
+    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
 
     const partyOrderRef = doc(db, 'partyOrders', order.id);
     const stockRef = doc(db, 'stocks', order.productId);
     const customerRef = doc(db, 'customers', order.customerId);
-    const purchaseHistoryRef = doc(db, 'purchaseHistory', order.customerId);
     const partyDeliveryRef = doc(collection(db, 'partyDeliveries'));
+    const salesRef = doc(db, 'sales', dateKey);
 
     const result = await runTransaction(db, async (tx) => {
-      const [stockSnap, purchaseHistorySnap] = await Promise.all([
+      const [partyOrderSnap, stockSnap, customerSnap, salesSnap] = await Promise.all([
+        tx.get(partyOrderRef),
         tx.get(stockRef),
-        tx.get(purchaseHistoryRef),
+        tx.get(customerRef),
+        tx.get(salesRef),
       ]);
 
-      const customerSnap = await tx.get(customerRef);
-
+      if (!partyOrderSnap.exists()) {
+        throw new Error('Party order not found');
+      }
       if (!stockSnap.exists()) {
         throw new Error('Stock not found');
       }
 
-      const stockData = stockSnap.data() as any;
+      const stockData = stockSnap.data() as Record<string, unknown>;
       const currentQuantity = Number(stockData?.quantity ?? 0) || 0;
-      const stockUnitPrice = Number(stockData?.price ?? 0) || 0;
 
-      const customerData = customerSnap.exists() ? (customerSnap.data() as any) : null;
-      const customerPrice = Number(customerData?.price ?? 0) || 0;
-      const customer1LPrice = Number(customerData?.['1lPrice'] ?? 0) || 0;
-      const customer500mlPrice = Number(customerData?.['500mlPrice'] ?? 0) || 0;
-      const customer300mlPrice = Number(customerData?.['300mlPrice'] ?? 0) || 0;
+      const customerData = customerSnap.exists()
+        ? (customerSnap.data() as Record<string, unknown>)
+        : null;
 
-      let unitPrice = stockUnitPrice;
-      switch (String(order.productId || '')) {
-        case '20L_PARTY_CAN':
-          unitPrice = customerPrice > 0 ? customerPrice : stockUnitPrice;
-          break;
-        case '1L_CASE':
-          unitPrice = customer1LPrice > 0 ? customer1LPrice : stockUnitPrice;
-          break;
-        case '500ML_CASE':
-          unitPrice = customer500mlPrice > 0 ? customer500mlPrice : stockUnitPrice;
-          break;
-        case '300ML_CASE':
-          unitPrice = customer300mlPrice > 0 ? customer300mlPrice : stockUnitPrice;
-          break;
-        default: {
-          const normalizedName = String(order.productName || '')
-            .toLowerCase()
-            .replace(/\s+/g, '');
-          const is20LPartyCanByName = normalizedName.includes('20l') && (normalizedName.includes('-p') || normalizedName.includes('party') || normalizedName.endsWith('p'));
-          if (is20LPartyCanByName && customerPrice > 0) {
-            unitPrice = customerPrice;
-          }
-        }
-      }
+      const unitPrice = getUnitPriceForPartyOrder(
+        customerData,
+        stockData,
+        order.productId,
+        order.productName,
+      );
 
       if (qty > currentQuantity) {
         throw new Error(`Insufficient stock. Available: ${currentQuantity}`);
@@ -231,18 +124,43 @@ export const completePartyDeliveryTransaction = async (
         paymentRef: 0,
       };
 
-      if (purchaseHistorySnap.exists()) {
-        const existingData = purchaseHistorySnap.data() as any;
-        const existingPurchases = (existingData?.purchases as PurchaseRecord[]) || [];
-        const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
-        tx.update(purchaseHistoryRef, {
-          purchases: updatedPurchases,
-        });
-      } else {
-        tx.set(purchaseHistoryRef, {
-          purchases: [purchaseRecord],
-        });
-      }
+      createPurchaseHistoryEntryTransaction(tx, db, order.customerId, purchaseRecord);
+
+      const saleAmount = unitPrice * qty;
+      const isDeliveredCan = order.productId === '20L_CAN' || order.productId === '20L_PARTY_CAN';
+
+      const salesPayload = mergeSalesRecord(
+        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
+        {
+          saleAmount,
+          ordersCount: 1,
+          deliveredCount: 1,
+          deliveredQty: qty,
+          isDeliveredCan,
+        },
+      );
+      tx.set(salesRef, salesPayload, { merge: true });
+
+      const dailyRecordEntry: DailyRecordEntry = {
+        customerId: order.customerId,
+        customerName: order.customerName,
+        customerAddress: order.address,
+        customerMobile: order.mobile,
+        product: String(order.productName || ''),
+        orderedAt: String(order.orderedAt || ''),
+        deliveredAt,
+        orderedQty: Number(order.quantity ?? qty) || qty,
+        deliveredQty: qty,
+        emptyQty: 0,
+        billAmount: saleAmount,
+        saleAmount,
+        amountPaid: 0,
+        paymentMethod: 'cash',
+        paymentRef: 0,
+        pendingPaymentReceived: 0,
+      };
+
+      createDailyRecordEntryTransaction(tx, db, order.productId, dailyRecordEntry, dateKey);
 
       const deliveryData: PartyDelivery = {
         customerId: order.customerId,

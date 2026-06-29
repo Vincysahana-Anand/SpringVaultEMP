@@ -23,7 +23,7 @@ import { showError, showSuccess } from '../shared/feedback/messageBus';
 import { getOrders } from '../services/orderService';
 import { getCustomers } from '../services/customerService';
 import { getStocks } from '../services/stockService';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey } from '../utils/dateUtils';
 import { getSalesRecord, submitCashForToday, SalesRecord } from '../services/salesService';
 import { getVaultRecord, setVaultRecord, VaultRecord } from '../services/vaultService';
 import { getExpenses } from '../services/expenseService';
@@ -175,13 +175,6 @@ export default function EmployeeDashboard() {
       const err = handleServiceError(e, 'fetchUserProfile');
       showError(err.message);
     }
-  };
-
-  const formatDateKey = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
   };
 
   const isServiceError = (res: any): res is { code: string; message: string } => {

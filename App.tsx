@@ -21,8 +21,15 @@ import InactiveCustomer from './src/components/InactiveCustomer';
 import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc } from '@react-native-firebase/firestore';
 import { handleServiceError } from './src/services/serviceErrorWrapper';
 import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
+import { migrateLegacyDailyRecords, migrateLegacyPurchaseHistories } from './src/services/firestoreHistoryMigration';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GlobalMessageProvider } from './src/shared/feedback/GlobalMessageProvider';
+import { User } from './src/types';
+
+interface CachedUser {
+  uid: string;
+  email: string | null;
+}
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -40,13 +47,24 @@ function App() {
 function AppContent() {
   const safeAreaInsets = useSafeAreaInsets();
   const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<CachedUser | null>(null);
+  const [profile, setProfile] = useState<User | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [showForgot, setShowForgot] = useState(false);
 
   useEffect(() => {
+    const runMigrations = async () => {
+      try {
+        await migrateLegacyPurchaseHistories();
+        await migrateLegacyDailyRecords();
+      } catch (error) {
+        console.error('Firestore history migration failed:', error);
+      }
+    };
+
+    void runMigrations();
+
     // Load cached user immediately to avoid brief login flash
     const loadCached = async () => {
       try {
@@ -195,13 +213,6 @@ function AppContent() {
       return <InactiveCustomer />;
   }
 
-  // Authenticated area
-  return (
-    <View style={[styles.container, { padding: 24 }]}> 
-      <Text style={{ fontSize: 18, marginBottom: 12 }}>Welcome {user.email}</Text>
-      <Button title="Sign out" onPress={handleSignOut} />
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

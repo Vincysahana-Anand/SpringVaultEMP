@@ -1,28 +1,8 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, query, where, orderBy, startAt, endAt, addDoc, updateDoc, deleteDoc, doc } from '@react-native-firebase/firestore';
+import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, query, where, orderBy, startAt, endAt, addDoc, updateDoc, deleteDoc, doc } from '@react-native-firebase/firestore';
+import type { Customer } from '../types';
 
-
-export interface Customer {
-  id?: string;
-  name: string;
-  mobile: string;
-  alternateContacts: string[];
-  doorNumber: string;
-  floor: string;
-  street: string;
-  area: string;
-  advanceAmount: number;
-  customerType: 'Residence' | 'Shop' | 'Party';
-  billingType: 'Cash' | 'Rotational Payment' | 'Monthly Payment' | 'Online';
-  price: number;
-  // Optional per-product pricing (used for non-20L deliveries).
-  '1lPrice'?: number;
-  '500mlPrice'?: number;
-  '300mlPrice'?: number;
-  canHolding: number;
-  extraCanHolding?: number;
-  balance?: number;
-}
+export type { Customer } from '../types';
 
 export const getCustomers = async (): Promise<Customer[] | ServiceError> => {
   try {
@@ -34,6 +14,20 @@ export const getCustomers = async (): Promise<Customer[] | ServiceError> => {
     );
   } catch (error) {
     return handleServiceError(error, 'getCustomers');
+  }
+};
+
+export const getCustomerById = async (id: string): Promise<Customer | null | ServiceError> => {
+  try {
+    const db = getFirestore();
+    const snapshot = await getDoc(doc(db, 'customers', id));
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    return { ...snapshot.data(), id: snapshot.id } as Customer;
+  } catch (error) {
+    return handleServiceError(error, 'getCustomerById');
   }
 };
 

@@ -4,27 +4,32 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { addCustomer, getCustomers } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
+import { useFormState } from '../shared/hooks/useFormState';
 
 interface Props {
   onBack?: () => void;
 }
 
+const CUSTOMER_FORM_INITIAL = {
+  name: '',
+  mobile: '',
+  alternateContacts: '',
+  doorNumber: '',
+  floor: '',
+  street: '',
+  area: '',
+  customerType: 'Residence' as 'Residence' | 'Shop' | 'Party',
+  billingType: 'Cash' as 'Cash' | 'Monthly Payment',
+  canHolding: '',
+  advanceAmount: '',
+  price: '',
+  oneLPrice: '',
+  fiveHundredMlPrice: '',
+  threeHundredMlPrice: '',
+};
+
 export default function AddCustomerScreen({ onBack }: Props) {
-  const [name, setName] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [alternateContacts, setAlternateContacts] = useState('');
-  const [doorNumber, setDoorNumber] = useState('');
-  const [floor, setFloor] = useState('');
-  const [street, setStreet] = useState('');
-  const [area, setArea] = useState('');
-  const [customerType, setCustomerType] = useState<'Residence' | 'Shop' | 'Party'>('Residence');
-  const [billingType, setBillingType] = useState<'Cash' | 'Monthly Payment'>('Cash');
-  const [canHolding, setCanHolding] = useState('');
-  const [advanceAmount, setAdvanceAmount] = useState('');
-  const [price, setPrice] = useState('');
-  const [oneLPrice, setOneLPrice] = useState('');
-  const [fiveHundredMlPrice, setFiveHundredMlPrice] = useState('');
-  const [threeHundredMlPrice, setThreeHundredMlPrice] = useState('');
+  const { values: form, setValue } = useFormState(CUSTOMER_FORM_INITIAL);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -39,13 +44,13 @@ export default function AddCustomerScreen({ onBack }: Props) {
   }, [onBack]);
 
   const handleSave = async () => {
-    if (!name.trim() || !mobile.trim() || !price) {
+    if (!form.name.trim() || !form.mobile.trim() || !form.price) {
       showError('Name, mobile, and price are required', { title: 'Validation' });
       return;
     }
-    const priceVal = parseInt(price, 10);
-    const canVal = parseInt(canHolding || '0', 10) || 0;
-    const advanceVal = parseInt(advanceAmount || '0', 10) || 0;
+    const priceVal = parseInt(form.price, 10);
+    const canVal = parseInt(form.canHolding || '0', 10) || 0;
+    const advanceVal = parseInt(form.advanceAmount || '0', 10) || 0;
     if (isNaN(priceVal) || priceVal < 0) {
       showError('Enter a valid price', { title: 'Validation' });
       return;
@@ -55,8 +60,8 @@ export default function AddCustomerScreen({ onBack }: Props) {
     try {
       const allCustomers = await getCustomers();
       if (Array.isArray(allCustomers)) {
-        const primary = mobile.trim();
-        const alternates = alternateContacts
+        const primary = form.mobile.trim();
+        const alternates = form.alternateContacts
           .split(',')
           .map((x) => x.trim())
           .filter(Boolean);
@@ -78,21 +83,21 @@ export default function AddCustomerScreen({ onBack }: Props) {
       // ignore errors in duplicate check, will surface on save if any
     }
 
-    const isShopOrParty = customerType === 'Shop' || customerType === 'Party';
-    const oneLPriceVal = oneLPrice.trim() ? parseInt(oneLPrice.trim(), 10) : undefined;
-    const fiveHundredMlPriceVal = fiveHundredMlPrice.trim() ? parseInt(fiveHundredMlPrice.trim(), 10) : undefined;
-    const threeHundredMlPriceVal = threeHundredMlPrice.trim() ? parseInt(threeHundredMlPrice.trim(), 10) : undefined;
+    const isShopOrParty = form.customerType === 'Shop' || form.customerType === 'Party';
+    const oneLPriceVal = form.oneLPrice.trim() ? parseInt(form.oneLPrice.trim(), 10) : undefined;
+    const fiveHundredMlPriceVal = form.fiveHundredMlPrice.trim() ? parseInt(form.fiveHundredMlPrice.trim(), 10) : undefined;
+    const threeHundredMlPriceVal = form.threeHundredMlPrice.trim() ? parseInt(form.threeHundredMlPrice.trim(), 10) : undefined;
 
     if (isShopOrParty) {
-      if (oneLPrice.trim() && (isNaN(oneLPriceVal as any) || (oneLPriceVal as number) < 0)) {
+      if (form.oneLPrice.trim() && (isNaN(oneLPriceVal as any) || (oneLPriceVal as number) < 0)) {
         showError('Enter a valid 1L price', { title: 'Validation' });
         return;
       }
-      if (fiveHundredMlPrice.trim() && (isNaN(fiveHundredMlPriceVal as any) || (fiveHundredMlPriceVal as number) < 0)) {
+      if (form.fiveHundredMlPrice.trim() && (isNaN(fiveHundredMlPriceVal as any) || (fiveHundredMlPriceVal as number) < 0)) {
         showError('Enter a valid 500ml price', { title: 'Validation' });
         return;
       }
-      if (threeHundredMlPrice.trim() && (isNaN(threeHundredMlPriceVal as any) || (threeHundredMlPriceVal as number) < 0)) {
+      if (form.threeHundredMlPrice.trim() && (isNaN(threeHundredMlPriceVal as any) || (threeHundredMlPriceVal as number) < 0)) {
         showError('Enter a valid 300ml price', { title: 'Validation' });
         return;
       }
@@ -101,19 +106,19 @@ export default function AddCustomerScreen({ onBack }: Props) {
     try {
       setLoading(true);
       const res = await addCustomer({
-        name: name.trim(),
-        mobile: mobile.trim(),
-        alternateContacts: alternateContacts
+        name: form.name.trim(),
+        mobile: form.mobile.trim(),
+        alternateContacts: form.alternateContacts
           .split(',')
           .map(c => c.trim())
           .filter(Boolean),
-        doorNumber: doorNumber.trim(),
-        floor: floor.trim(),
-        street: street.trim(),
-        area: area.trim(),
+        doorNumber: form.doorNumber.trim(),
+        floor: form.floor.trim(),
+        street: form.street.trim(),
+        area: form.area.trim(),
         advanceAmount: advanceVal,
-        customerType,
-        billingType,
+        customerType: form.customerType,
+        billingType: form.billingType,
         price: priceVal,
         ...(isShopOrParty
           ? {
@@ -147,37 +152,37 @@ export default function AddCustomerScreen({ onBack }: Props) {
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Name</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Customer name" />
+        <TextInput style={styles.input} value={form.name} onChangeText={(v) => setValue('name', v)} placeholder="Customer name" />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Mobile</Text>
-        <TextInput style={styles.input} value={mobile} onChangeText={setMobile} placeholder="10-digit mobile" keyboardType="phone-pad" />
+        <TextInput style={styles.input} value={form.mobile} onChangeText={(v) => setValue('mobile', v)} placeholder="10-digit mobile" keyboardType="phone-pad" />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Alternate Contacts</Text>
-        <TextInput style={styles.input} value={alternateContacts} onChangeText={setAlternateContacts} placeholder="Comma separated" />
+        <TextInput style={styles.input} value={form.alternateContacts} onChangeText={(v) => setValue('alternateContacts', v)} placeholder="Comma separated" />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Door Number</Text>
-        <TextInput style={styles.input} value={doorNumber} onChangeText={setDoorNumber} placeholder="Door / Flat" />
+        <TextInput style={styles.input} value={form.doorNumber} onChangeText={(v) => setValue('doorNumber', v)} placeholder="Door / Flat" />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Floor</Text>
-        <TextInput style={styles.input} value={floor} onChangeText={setFloor} placeholder="Floor" />
+        <TextInput style={styles.input} value={form.floor} onChangeText={(v) => setValue('floor', v)} placeholder="Floor" />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Street</Text>
-        <TextInput style={styles.input} value={street} onChangeText={setStreet} placeholder="Street" />
+        <TextInput style={styles.input} value={form.street} onChangeText={(v) => setValue('street', v)} placeholder="Street" />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Area</Text>
-        <TextInput style={styles.input} value={area} onChangeText={setArea} placeholder="Area / locality" />
+        <TextInput style={styles.input} value={form.area} onChangeText={(v) => setValue('area', v)} placeholder="Area / locality" />
       </View>
 
       <View style={[styles.fieldGroup, { gap: 10 }]}> 
@@ -186,10 +191,10 @@ export default function AddCustomerScreen({ onBack }: Props) {
           {(['Residence','Shop','Party'] as const).map(type => (
             <TouchableOpacity
               key={type}
-              style={[styles.badge, customerType === type && styles.badgeActive]}
-              onPress={() => setCustomerType(type)}
+              style={[styles.badge, form.customerType === type && styles.badgeActive]}
+              onPress={() => setValue('customerType', type)}
             >
-              <Text style={[styles.badgeText, customerType === type && styles.badgeTextActive]}>{type}</Text>
+              <Text style={[styles.badgeText, form.customerType === type && styles.badgeTextActive]}>{type}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -204,10 +209,10 @@ export default function AddCustomerScreen({ onBack }: Props) {
           ] as const).map((opt) => (
             <TouchableOpacity
               key={opt.value}
-              style={[styles.badge, billingType === opt.value && styles.badgeActive]}
-              onPress={() => setBillingType(opt.value)}
+              style={[styles.badge, form.billingType === opt.value && styles.badgeActive]}
+              onPress={() => setValue('billingType', opt.value)}
             >
-              <Text style={[styles.badgeText, billingType === opt.value && styles.badgeTextActive]}>
+              <Text style={[styles.badgeText, form.billingType === opt.value && styles.badgeTextActive]}>
                 {opt.label}
               </Text>
             </TouchableOpacity>
@@ -218,28 +223,28 @@ export default function AddCustomerScreen({ onBack }: Props) {
       <View style={styles.row}>
         <View style={[styles.fieldGroup, { flex: 1 }]}> 
           <Text style={styles.label}>Can Holding</Text>
-          <TextInput style={styles.input} value={canHolding} onChangeText={setCanHolding} placeholder="0" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
+          <TextInput style={styles.input} value={form.canHolding} onChangeText={(v) => setValue('canHolding', v)} placeholder="0" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
         </View>
         <View style={{ width: 12 }} />
         <View style={[styles.fieldGroup, { flex: 1 }]}> 
           <Text style={styles.label}>Advance Amount</Text>
-          <TextInput style={styles.input} value={advanceAmount} onChangeText={setAdvanceAmount} placeholder="0" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
+          <TextInput style={styles.input} value={form.advanceAmount} onChangeText={(v) => setValue('advanceAmount', v)} placeholder="0" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
         </View>
       </View>
 
       <View style={styles.fieldGroup}> 
         <Text style={styles.label}>Price</Text>
-        <TextInput style={styles.input} value={price} onChangeText={setPrice} placeholder="₹" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
+        <TextInput style={styles.input} value={form.price} onChangeText={(v) => setValue('price', v)} placeholder="₹" keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'} />
       </View>
 
-      {customerType === 'Shop' || customerType === 'Party' ? (
+      {form.customerType === 'Shop' || form.customerType === 'Party' ? (
         <>
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>1L Price (₹)</Text>
             <TextInput
               style={styles.input}
-              value={oneLPrice}
-              onChangeText={setOneLPrice}
+              value={form.oneLPrice}
+              onChangeText={(v) => setValue('oneLPrice', v)}
               placeholder="₹"
               keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             />
@@ -249,8 +254,8 @@ export default function AddCustomerScreen({ onBack }: Props) {
             <Text style={styles.label}>500ml Price (₹)</Text>
             <TextInput
               style={styles.input}
-              value={fiveHundredMlPrice}
-              onChangeText={setFiveHundredMlPrice}
+              value={form.fiveHundredMlPrice}
+              onChangeText={(v) => setValue('fiveHundredMlPrice', v)}
               placeholder="₹"
               keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             />
@@ -260,8 +265,8 @@ export default function AddCustomerScreen({ onBack }: Props) {
             <Text style={styles.label}>300ml Price (₹)</Text>
             <TextInput
               style={styles.input}
-              value={threeHundredMlPrice}
-              onChangeText={setThreeHundredMlPrice}
+              value={form.threeHundredMlPrice}
+              onChangeText={(v) => setValue('threeHundredMlPrice', v)}
               placeholder="₹"
               keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
             />

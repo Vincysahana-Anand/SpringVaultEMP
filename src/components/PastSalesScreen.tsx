@@ -14,7 +14,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey, formatDisplayDate } from '../utils/dateUtils';
 import { getSalesRecord, SalesRecord } from '../services/salesService';
 
 interface Props { onBack?: () => void; }
@@ -238,14 +238,3 @@ const styles = StyleSheet.create({
   statValueHighlight: { color: '#0ea5e9' },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 8 },
 });
-
-const formatDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const formatDisplayDate = (date: Date) => {
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-};

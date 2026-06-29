@@ -14,19 +14,10 @@ import { getStocks, updateStock, Stock } from '../services/stockService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import EditStockScreen from './EditStockScreen';import DropletLoader from './DropletLoader';
+import { colors } from '../shared/theme/theme';
 interface StockScreenProps {
   userRole?: 'owner' | 'employee';
 }
-
-const colors = {
-  primary: { 50: '#f0f9ff', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1' },
-  success: { 500: '#10b981', 600: '#059669' },
-  danger: { 500: '#ef4444', 600: '#dc2626' },
-  warning: { 500: '#f59e0b', 600: '#d97706' },
-  bg: { white: '#ffffff', light: '#f8fafc', dark: '#1e293b' },
-  gray: { 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 800: '#1e293b' },
-  border: '#e2e8f0',
-};
 
 const typography = {
   fontSize: { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24 },

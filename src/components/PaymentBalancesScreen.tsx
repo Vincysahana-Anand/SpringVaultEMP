@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, RefreshControl, TextInput, Modal, Pressable, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { getCustomers, Customer, updateCustomer } from '../services/customerService';
-import { addPurchaseHistory, getCustomerPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
-import { addDailyRecord, DailyRecordEntry } from '../services/dailyRecordService';
-import { updateSalesRecord } from '../services/salesService';
-import { getISTDate } from '../utils/dateUtils';
+import { getCustomers, Customer } from '../services/customerService';
+import { getCustomerPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
+import { completePaymentTransaction } from '../services/paymentService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
@@ -873,77 +871,22 @@ export default function PaymentBalancesScreen({ onBack, userRole = 'employee', i
     try {
       setSubmittingPay(true);
       const startingBalance = payCustomer.balance || 0;
-      const newBalance = startingBalance - amountValue;
+      const txResult = await completePaymentTransaction({
+        customerId: payCustomer.id,
+        customerName: payCustomer.name,
+        customerMobile: payCustomer.mobile,
+        startingBalance,
+        amount: amountValue,
+        paymentMethod: payMethod,
+        paymentRef: payRef,
+      });
 
-      // 1) Update customer balance
-      const res = await updateCustomer(payCustomer.id, { balance: newBalance });
-      if (res !== true) {
-        const err = handleServiceError(res, 'updateCustomer');
+      if (txResult && typeof txResult === 'object' && 'code' in txResult && 'message' in txResult) {
+        const err = handleServiceError(txResult, 'completePaymentTransaction');
         showError(err.message);
         setSubmittingPay(false);
         return;
       }
-
-      // 2) Add purchase history entry for payment
-      const now = getISTDate();
-      const stamp = now.toLocaleString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-
-      await addPurchaseHistory(payCustomer.id, {
-        product: 'payment',
-        deliveredQty: 0,
-        emptyQty: 0,
-        orderedAt: stamp,
-        deliveredAt: stamp,
-        billAmount: startingBalance,
-        amountPaid: amountValue,
-        paymentMethod: payMethod,
-        paymentRef: payMethod === 'online' ? Number(payRef) || 0 : 0,
-      });
-
-      // 3) Update sales record for today (pending payment received + total sale)
-      const cashPaidValue = payMethod === 'cash' ? amountValue : 0;
-      const onlinePaidValue = payMethod === 'online' ? amountValue : 0;
-      await updateSalesRecord(
-        0, //deliveredQty
-        0, //emptyQty
-        0, //cashPaidValue
-        0, //onlinePaidValue
-        0, //billAmount
-        false, //isDeliveredCan
-        0, //saleAmount
-        amountValue, //pendingPaymentReceived
-        0, //ordersCount
-        0, //deliveredCount
-        cashPaidValue, //cashBillsPayment
-        onlinePaidValue, //onlineBillsPayment
-        0 //emptyReturned
-      );
-
-      // 4) Add daily record under Payments doc
-      const dailyEntry: DailyRecordEntry = {
-        customerId: payCustomer.id,
-        customerName: payCustomer.name,
-        customerMobile: payCustomer.mobile,
-        product: 'payment',
-        orderedAt: stamp,
-        deliveredAt: stamp,
-        deliveredQty: 0,
-        emptyQty: 0,
-        billAmount: startingBalance,
-        saleAmount: 0,
-        amountPaid: amountValue,
-        paymentMethod: payMethod,
-        paymentRef: payMethod === 'online' ? Number(payRef) || 0 : 0,
-        pendingPaymentReceived: amountValue,
-      };
-      await addDailyRecord('Payments', dailyEntry);
 
       await load();
       setShowPayModal(false);

@@ -8,10 +8,12 @@ import {
 
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import { Order } from './orderService';
-import { getISTDate } from '../utils/dateUtils';
-import { PurchaseRecord } from './purchaseHistoryService';
-import { DailyRecordEntry } from './dailyRecordService';
-import { SalesRecord } from './salesService';
+import { getTransactionTimestamp } from '../utils/dateUtils';
+import { DailyRecordEntry, PurchaseRecord } from '../types';
+import { getUnitPriceForCustomer } from '../shared/business/pricing';
+import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
+import { createDailyRecordEntryTransaction } from './dailyRecordService';
+import { mergeSalesRecord } from '../shared/business/recordMerge';
 
 export type CompleteDeliveryParams = {
   order: Order;
@@ -20,24 +22,6 @@ export type CompleteDeliveryParams = {
   amountPaid: number;
   paymentMethod: 'cash' | 'online';
   paymentRef?: string;
-};
-
-const formatDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const formatDeliveredAt = (d: Date) => {
-  return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
 };
 
 export async function completeDeliveryTransaction(
@@ -59,60 +43,22 @@ export async function completeDeliveryTransaction(
 
     const db = getFirestore();
 
-    const deliveredDate = getISTDate();
-    const deliveredAt = formatDeliveredAt(deliveredDate);
-    const dateKey = formatDateKey(deliveredDate);
+    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
 
     const orderRef = doc(db, 'orders', order.id);
     const customerRef = doc(db, 'customers', order.customerId);
     const stockRef = doc(db, 'stocks', order.productId);
     const salesRef = doc(db, 'sales', dateKey);
-    const purchaseHistoryRef = doc(db, 'purchaseHistory', order.customerId);
-    const dailyRecordRef = doc(db, 'dailyRecord', order.productId);
 
-    const isDeliveredCan = !!(
-      order.productName &&
-      order.productName.toLowerCase().includes('20') &&
-      order.productName.toLowerCase().includes('liter')
-    );
-
-    const getUnitPriceForCustomer = (customerData: any, stockData: any, productId: string) => {
-      const stockFallback = Number(stockData?.price ?? 0) || 0;
-      const getNum = (v: any) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-      };
-
-      if (productId === '1L_CASE') {
-        const custom = customerData?.['1lPrice'];
-        const n = getNum(custom);
-        return n > 0 ? n : stockFallback;
-      }
-      if (productId === '500ML_CASE') {
-        const custom = customerData?.['500mlPrice'];
-        const n = getNum(custom);
-        return n > 0 ? n : stockFallback;
-      }
-      if (productId === '300ML_CASE') {
-        const custom = customerData?.['300mlPrice'];
-        const n = getNum(custom);
-        return n > 0 ? n : stockFallback;
-      }
-
-      const n = getNum(customerData?.price);
-      return n > 0 ? n : stockFallback;
-    };
+    const isDeliveredCan = order.productId === '20L_CAN' || order.productId === '20L_PARTY_CAN';
 
     const result = await runTransaction(db, async (tx) => {
-      const [orderSnap, customerSnap, stockSnap, salesSnap, purchaseHistorySnap, dailyRecordSnap] =
-        await Promise.all([
-          tx.get(orderRef),
-          tx.get(customerRef),
-          tx.get(stockRef),
-          tx.get(salesRef),
-          tx.get(purchaseHistoryRef),
-          tx.get(dailyRecordRef),
-        ]);
+const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
+      tx.get(orderRef),
+      tx.get(customerRef),
+      tx.get(stockRef),
+      tx.get(salesRef),
+    ]);
 
       if (!orderSnap.exists()) {
         throw new Error('Order not found');
@@ -124,9 +70,9 @@ export async function completeDeliveryTransaction(
         throw new Error('Stock not found');
       }
 
-      const orderData = orderSnap.data() as any;
-      const customerData = customerSnap.data() as any;
-      const stockData = stockSnap.data() as any;
+      const orderData = orderSnap.data() as Record<string, unknown>;
+      const customerData = customerSnap.data() as Record<string, unknown>;
+      const stockData = stockSnap.data() as Record<string, unknown>;
 
       const originalOrderQuantity = Number(orderData?.quantity ?? order.quantity ?? 0) || 0;
       const remainingQuantity = Math.max(originalOrderQuantity - fullBottlesDelivered, 0);
@@ -140,7 +86,8 @@ export async function completeDeliveryTransaction(
       const canHolding = Number(customerData?.canHolding ?? 0) || 0;
       const currentExtraCanHolding = Number(customerData?.extraCanHolding ?? 0) || 0;
       const currentTotalCans = canHolding + currentExtraCanHolding;
-      const newTotalCans = currentTotalCans + fullBottlesDelivered - emptyBottlesCollected;
+      const effectiveEmptyCollected = isDeliveredCan ? emptyBottlesCollected : 0;
+      const newTotalCans = currentTotalCans + (isDeliveredCan ? fullBottlesDelivered - effectiveEmptyCollected : 0);
       const newExtraCanHolding = newTotalCans - canHolding;
 
       const currentQuantity = Number(stockData?.quantity ?? 0) || 0;
@@ -152,28 +99,31 @@ export async function completeDeliveryTransaction(
       }
 
       const newQuantity = currentQuantity - fullBottlesDelivered;
-      const newEmpty = currentEmpty + emptyBottlesCollected;
-      const newStockExtraCan = currentExtraCan + fullBottlesDelivered - emptyBottlesCollected;
+      const newEmpty = currentEmpty + effectiveEmptyCollected;
+      const newStockExtraCan = currentExtraCan + (isDeliveredCan ? fullBottlesDelivered - effectiveEmptyCollected : 0);
 
-      // Update customer
-      tx.update(customerRef, {
+      const customerUpdate: Record<string, number> = {
         balance: newCustomerBalance,
-        extraCanHolding: newExtraCanHolding,
-      });
+      };
+      if (isDeliveredCan) {
+        customerUpdate.extraCanHolding = newExtraCanHolding;
+      }
+      tx.update(customerRef, customerUpdate);
 
-      // Update stock
-      tx.update(stockRef, {
+      const stockUpdate: Record<string, number> = {
         quantity: newQuantity,
-        empty: newEmpty,
-        extraCan: newStockExtraCan,
-      });
+      };
+      if (isDeliveredCan) {
+        stockUpdate.empty = newEmpty;
+        stockUpdate.extraCan = newStockExtraCan;
+      }
+      tx.update(stockRef, stockUpdate);
 
-      // Purchase history
       const purchaseRecord: PurchaseRecord = {
         product: order.productName,
         deliveredQty: fullBottlesDelivered,
-        emptyQty: emptyBottlesCollected,
-        orderedAt: order.orderedAt || (orderData?.orderedAt ?? ''),
+        emptyQty: effectiveEmptyCollected,
+        orderedAt: order.orderedAt || String(orderData?.orderedAt ?? ''),
         deliveredAt,
         billAmount,
         amountPaid,
@@ -181,73 +131,42 @@ export async function completeDeliveryTransaction(
         paymentRef: paymentMethod === 'online' ? parseInt(paymentRef || '0', 10) || 0 : 0,
       };
 
-      if (purchaseHistorySnap.exists()) {
-        // keep the latest 20 records only for a customer to prevent unbounded growth
-        const existingData = purchaseHistorySnap.data() as any;
-        const existingPurchases = (existingData?.purchases as PurchaseRecord[]) || [];
-        const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
-        tx.update(purchaseHistoryRef, {
-          purchases: updatedPurchases,
-        });
-      } else {
-        tx.set(purchaseHistoryRef, {
-          purchases: [purchaseRecord],
-        });
-      }
+      createPurchaseHistoryEntryTransaction(tx, db, order.customerId, purchaseRecord);
 
-      // Sales record (daily aggregate)
       const saleAmount = unitPrice * fullBottlesDelivered;
       const pendingPaymentReceived = saleAmount < amountPaid ? amountPaid - saleAmount : 0;
       const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaid - pendingPaymentReceived) : 0;
       const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaid - pendingPaymentReceived) : 0;
 
-      if (salesSnap.exists()) {
-        const existing = salesSnap.data() as SalesRecord;
-        const updated: SalesRecord = {
-          totalSale: Number(existing.totalSale || 0) + saleAmount,
-          cashPayment: Number(existing.cashPayment || 0) + cashPaidValue,
-          onlinePayment: Number(existing.onlinePayment || 0) + onlinePaidValue,
-          expense: Number(existing.expense || 0),
-          orders: Number(existing.orders || 0) + 0,
-          delivered: Number(existing.delivered || 0) + 1,
-          deliveredCans: Number(existing.deliveredCans || 0) + (isDeliveredCan ? fullBottlesDelivered : 0),
-          emptyCollected: Number(existing.emptyCollected || 0) + emptyBottlesCollected,
-          pendingPaymentReceived: Number(existing.pendingPaymentReceived || 0) + pendingPaymentReceived,
-          cashBillsPayment: Number(existing.cashBillsPayment || 0) + (paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0),
-          onlineBillsPayment: Number(existing.onlineBillsPayment || 0) + (paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0),
-          emptyReturned: Number(existing.emptyReturned || 0) + 0,
-        };
-        tx.set(salesRef, updated, { merge: true });
-      } else {
-        const newRec: SalesRecord = {
-          totalSale: saleAmount,
-          cashPayment: cashPaidValue,
-          onlinePayment: onlinePaidValue,
-          expense: 0,
-          orders: 0,
-          delivered: 1,
-          deliveredCans: isDeliveredCan ? fullBottlesDelivered : 0,
-          emptyCollected: emptyBottlesCollected,
+      const salesPayload = mergeSalesRecord(
+        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
+        {
+          saleAmount,
+          cashPaidValue,
+          onlinePaidValue,
+          ordersCount: 1,
+          deliveredCount: 1,
+          deliveredQty: fullBottlesDelivered,
+          emptyQty: effectiveEmptyCollected,
           pendingPaymentReceived,
-          cashBillsPayment:  (paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0),
-          onlineBillsPayment:  (paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0),
-          emptyReturned: 0,
-        };
-        tx.set(salesRef, newRec, { merge: true });
-      }
+          cashBillsPayment: paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0,
+          onlineBillsPayment: paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0,
+          isDeliveredCan,
+        },
+      );
+      tx.set(salesRef, salesPayload, { merge: true });
 
-      // Daily record
       const dailyRecordEntry: DailyRecordEntry = {
         customerId: order.customerId,
         customerName: order.customerName,
         customerAddress: order.address,
         customerMobile: order.mobile,
         product: order.productName,
-        orderedAt: order.orderedAt || (orderData?.orderedAt ?? ''),
+        orderedAt: order.orderedAt || String(orderData?.orderedAt ?? ''),
         deliveredAt,
         orderedQty: originalOrderQuantity,
         deliveredQty: fullBottlesDelivered,
-        emptyQty: emptyBottlesCollected,
+        emptyQty: effectiveEmptyCollected,
         billAmount,
         saleAmount,
         amountPaid,
@@ -256,39 +175,8 @@ export async function completeDeliveryTransaction(
         pendingPaymentReceived,
       };
 
-      if (dailyRecordSnap.exists()) {
-        const data = dailyRecordSnap.data() as any;
-        console.log('existing dailyRecordSnap:', dailyRecordSnap);
-        //find the data before 45 days from the dateKey and remove it from the data base only if the order.productId is 20L_CAN 
-        const cutoffDate = new Date(deliveredDate);
-        cutoffDate.setDate(cutoffDate.getDate() - 45);
-        const cutoffDateKey = formatDateKey(cutoffDate);
-        console.log('cutoffDateKey:', cutoffDateKey);
-        const cleanupPayload: Record<string, any> = {};
-        //data befor the cutoff date will be removed only for 20L_CAN product
-        if (order.productId === '20L_CAN') {
-          for (const key in data) {
-            if (key < cutoffDateKey) {
-              console.log('removing daily record for date:', key);
-              cleanupPayload[key] = deleteField();
-            }
-          }
-        }
-        const existingEntries = (data?.[dateKey] as DailyRecordEntry[]) || [];
-        tx.set(
-          dailyRecordRef,
-          {
-            ...cleanupPayload,
-            [dateKey]: [...existingEntries, dailyRecordEntry],
-          },
-          { merge: true }
-        );
-      } else {
-        console.log('new dailyRecordSnap:', dailyRecordSnap);
-        tx.set(dailyRecordRef, { [dateKey]: [dailyRecordEntry] });
-      }
+      createDailyRecordEntryTransaction(tx, db, order.productId, dailyRecordEntry, dateKey);
 
-      // Partial delivery: create a new pending order for remaining qty
       if (remainingQuantity > 0 && fullBottlesDelivered < originalOrderQuantity) {
         const newOrderTimestamp = getISTDate();
         const formattedNewOrderedAt = formatDeliveredAt(newOrderTimestamp);
@@ -311,7 +199,6 @@ export async function completeDeliveryTransaction(
         tx.set(newOrderRef, newOrderPayload);
       }
 
-      // Delete the original order at the end
       tx.delete(orderRef);
 
       return {

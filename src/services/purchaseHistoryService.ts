@@ -1,53 +1,44 @@
+import {
+  FirebaseFirestoreTypes,
+  collection,
+  collectionGroup,
+  doc,
+  getDocs,
+  getFirestore,
+  limit,
+  orderBy,
+  query,
+  setDoc,
+  startAfter,
+} from '@react-native-firebase/firestore';
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, setDoc, updateDoc, doc } from '@react-native-firebase/firestore';
+import { CustomerPurchaseHistory, PurchaseRecord } from '../types';
 
-export interface PurchaseRecord {
-  product: string;
-  deliveredQty: number;
-  emptyQty: number;
-  orderedAt: string;
-  deliveredAt: string;
-  billAmount: number;
-  amountPaid: number;
-  paymentMethod: 'cash' | 'online';
-  paymentRef?: number;
-}
+export type { PurchaseRecord, CustomerPurchaseHistory } from '../types';
 
-export interface CustomerPurchaseHistory {
-  customerId: string;
-  purchases: PurchaseRecord[];
-}
+const DEFAULT_PURCHASE_HISTORY_PAGE_SIZE = 50;
 
-// ✅ Add or update purchase history for a customer
+export type PurchaseHistoryCursor = FirebaseFirestoreTypes.QueryDocumentSnapshot | null;
+
+export type CustomerPurchaseHistoryPage = {
+  records: PurchaseRecord[];
+  nextCursor: PurchaseHistoryCursor;
+  hasMore: boolean;
+};
+
 export const addPurchaseHistory = async (
   customerId: string,
-  purchaseRecord: PurchaseRecord
+  purchaseRecord: PurchaseRecord,
 ): Promise<true | ServiceError> => {
   try {
-    console.log('Adding purchase history for customer:', customerId, purchaseRecord);
     const db = getFirestore();
-    const purchaseHistoryRef = doc(db, 'purchaseHistory', customerId);
+    const purchasesCollection = collection(db, 'purchaseHistory', customerId, 'purchases');
+    const purchaseDocRef = doc(purchasesCollection);
 
-    // Check if customer history exists
-    const docSnap = await getDoc(purchaseHistoryRef);
-
-    if (docSnap.exists()) {
-      console.log('Customer history exists, updating with new purchase');
-      const existingData = docSnap.data() as CustomerPurchaseHistory;
-      const existingPurchases = existingData?.purchases || [];
-      const updatedPurchases = [...existingPurchases, purchaseRecord].slice(-20);
-      await updateDoc(purchaseHistoryRef, {
-        purchases: updatedPurchases,
-      });
-      console.log('Purchase history updated successfully');
-    } else {
-      console.log('Customer history does not exist, creating new record');
-      // Create new customer history
-      await setDoc(purchaseHistoryRef, {
-        purchases: [purchaseRecord],
-      });
-      console.log('Purchase history created successfully');
-    }
+    await setDoc(purchaseDocRef, {
+      ...purchaseRecord,
+      createdAt: new Date(),
+    });
 
     return true;
   } catch (error) {
@@ -56,34 +47,115 @@ export const addPurchaseHistory = async (
   }
 };
 
-// ✅ Get all purchases for a specific customer
+export const createPurchaseHistoryEntryTransaction = (
+  tx: FirebaseFirestoreTypes.Transaction,
+  db: ReturnType<typeof getFirestore>,
+  customerId: string,
+  purchaseRecord: PurchaseRecord,
+): void => {
+  const purchasesCollection = collection(db, 'purchaseHistory', customerId, 'purchases');
+  const purchaseDocRef = doc(purchasesCollection);
+  tx.set(purchaseDocRef, {
+    ...purchaseRecord,
+    createdAt: new Date(),
+  });
+};
+
 export const getCustomerPurchaseHistory = async (
-  customerId: string
+  customerId: string,
 ): Promise<PurchaseRecord[] | ServiceError> => {
   try {
-    const db = getFirestore();
-    const purchaseHistoryRef = doc(db, 'purchaseHistory', customerId);
-    const docSnap = await getDoc(purchaseHistoryRef);
+    let cursor: PurchaseHistoryCursor = null;
+    const records: PurchaseRecord[] = [];
 
-    if (docSnap.exists()) {
-      const data = docSnap.data() as CustomerPurchaseHistory;
-      return data.purchases || [];
+    while (true) {
+      const page = await getCustomerPurchaseHistoryPage(
+        customerId,
+        DEFAULT_PURCHASE_HISTORY_PAGE_SIZE,
+        cursor,
+      );
+
+      if (!('records' in page)) {
+        return page;
+      }
+
+      records.push(...page.records);
+      if (!page.hasMore || !page.nextCursor) {
+        break;
+      }
+      cursor = page.nextCursor;
     }
 
-    return [];
+    return records;
   } catch (error) {
     return handleServiceError(error, 'getCustomerPurchaseHistory');
   }
 };
 
-// ✅ Get all purchase histories
+export const getCustomerPurchaseHistoryPage = async (
+  customerId: string,
+  pageSize = DEFAULT_PURCHASE_HISTORY_PAGE_SIZE,
+  cursor: PurchaseHistoryCursor = null,
+): Promise<CustomerPurchaseHistoryPage | ServiceError> => {
+  try {
+    const db = getFirestore();
+    const cappedPageSize = Math.max(1, pageSize);
+    const constraints: FirebaseFirestoreTypes.QueryConstraint[] = [
+      orderBy('createdAt', 'desc'),
+      limit(cappedPageSize),
+    ];
+
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+
+    const purchasesQuery = query(
+      collection(db, 'purchaseHistory', customerId, 'purchases'),
+      ...constraints,
+    );
+
+    const snapshot = await getDocs(purchasesQuery);
+    const records: PurchaseRecord[] = snapshot.docs.map(
+      (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as PurchaseRecord,
+    );
+    const lastDoc = snapshot.docs.length > 0
+      ? snapshot.docs[snapshot.docs.length - 1]
+      : null;
+    const hasMore = snapshot.docs.length === cappedPageSize;
+
+    return {
+      records,
+      nextCursor: hasMore ? lastDoc : null,
+      hasMore,
+    };
+  } catch (error) {
+    return handleServiceError(error, 'getCustomerPurchaseHistoryPage');
+  }
+};
+
 export const getAllPurchaseHistories = async (): Promise<
   CustomerPurchaseHistory[] | ServiceError
 > => {
   try {
     const db = getFirestore();
-    const snapshot = await getDocs(collection(db, 'purchaseHistory'));
-    return snapshot.docs.map((doc: FirebaseFirestoreTypes.QueryDocumentSnapshot) => doc.data() as CustomerPurchaseHistory);
+    const snapshot = await getDocs(collectionGroup(db, 'purchases'));
+    const map = new Map<string, PurchaseRecord[]>();
+
+    snapshot.docs.forEach((docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
+      const pathParts = docSnap.ref.path.split('/');
+      if (pathParts.length >= 4) {
+        const customerId = pathParts[1];
+        const record = docSnap.data() as PurchaseRecord;
+        const existing = map.get(customerId) ?? [];
+        existing.push(record);
+        map.set(customerId, existing);
+      }
+    });
+
+    return Array.from(map.entries()).map(([customerId, purchases]) => ({
+      customerId,
+      purchases,
+    }));
   } catch (error) {
     return handleServiceError(error, 'getAllPurchaseHistories');
   }
