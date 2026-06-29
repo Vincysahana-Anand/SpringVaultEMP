@@ -26,7 +26,6 @@ type DocumentField = {
 
 const knownCollections = [
   'customers',
-  'customersPurchaseManage',
   'dailyRecord',
   'expenses',
   'orders',

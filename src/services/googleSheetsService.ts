@@ -1,6 +1,8 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwUgiIihmkg5Y1kEqAaINS4jiarUqxVcBv6mc91Bu02rP2FZzY3kmBwiBKtvzRjk0ff/exec';
-const GOOGLE_SHEET_REPORT_URL = 'https://script.google.com/macros/s/AKfycbwGMH2y-M4UuUUH1-D8JZHboIGQf1bsBbxOOKIDxXZ5FNV_2S1FKSoeh35xNOgc3dSe/exec';
+import { config } from '../shared/config';
+
+const GOOGLE_SHEET_URL = config.googleSheets.deliveryUrl;
+const GOOGLE_SHEET_REPORT_URL = config.googleSheets.reportUrl;
 
 /**
  * CREATE delivery record for a customerId (POST)

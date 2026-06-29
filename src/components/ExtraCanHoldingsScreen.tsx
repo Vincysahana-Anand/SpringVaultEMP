@@ -21,12 +21,7 @@ import { showError } from '../shared/feedback/messageBus';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import EditCustomerScreen from './EditCustomerScreen';
 import ExtraCanHistoryScreen from './ExtraCanHistoryScreen';
-import { updateCustomer } from '../services/customerService';
-import { addPurchaseHistory } from '../services/purchaseHistoryService';
-import { updateSalesRecord } from '../services/salesService';
-import { addDailyRecord } from '../services/dailyRecordService';
-import { getISTDate } from '../utils/dateUtils';
-import { getStocks, resolveProductName, updateStock } from '../services/stockService';
+import { completeEmptyCanReturnTransaction } from '../services/emptyCanReturnService';
 
 interface Props {
   onBack?: () => void;
@@ -168,117 +163,29 @@ export default function ExtraCanHoldingsScreen({ onBack, userRole = 'employee', 
       return;
     }
     if (savingReturn) return;
-    const current = returnCustomer.extraCanHolding || 0;
-    const nextValue = Math.max(0, current - qty);
-    const timestampLabel = getISTDate().toLocaleString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-    const productName = resolveProductName(returnProduct);
     try {
       setSavingReturn(true);
-      const updateCustomerResult = await updateCustomer(returnCustomer.id, { extraCanHolding: nextValue });
-      if (updateCustomerResult !== true) {
-        const err = handleServiceError(updateCustomerResult, 'updateCustomer');
-        showError(err.message);
-        setSavingReturn(false);
-        return;
-      }
-
-      const purchaseRecordResult = await addPurchaseHistory(returnCustomer.id, {
-        product: "extraCans",
-        deliveredQty: 0,
-        emptyQty: qty,
-        orderedAt: timestampLabel,
-        deliveredAt: timestampLabel,
-        billAmount: 0,
-        amountPaid: 0,
-        paymentMethod: 'cash',
-        paymentRef: 0,
-      });
-      if (purchaseRecordResult !== true) {
-        const err = handleServiceError(purchaseRecordResult, 'addPurchaseHistory');
-        showError(err.message);
-        setSavingReturn(false);
-        return;
-      }
-
-      const salesUpdateResult = await updateSalesRecord(
-        0,
-        0,
-        0,
-        0,
-        0,
-        false,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        qty,
-      );
-      if (salesUpdateResult !== true) {
-        const err = handleServiceError(salesUpdateResult, 'updateSalesRecord');
-        showError(err.message);
-        setSavingReturn(false);
-        return;
-      }
-
-      const dailyRecordResult = await addDailyRecord("emptyReturned", {
+      const txResult = await completeEmptyCanReturnTransaction({
         customerId: returnCustomer.id,
         customerName: returnCustomer.name,
         customerAddress: buildFullAddress(returnCustomer),
         customerMobile: returnCustomer.mobile,
-        product: "emptyReturned",
-        orderedAt: timestampLabel,
-        deliveredAt: timestampLabel,
-        orderedQty: 0,
-        deliveredQty: 0,
-        emptyQty: qty,
-        billAmount: returnCustomer.balance || 0,
-        saleAmount: 0,
-        amountPaid: 0,
-        paymentMethod: 'cash',
-        paymentRef: 0,
-        pendingPaymentReceived: 0,
+        customerBalance: returnCustomer.balance || 0,
+        productId: returnProduct,
+        qty,
       });
-      if (dailyRecordResult !== true) {
-        const err = handleServiceError(dailyRecordResult, 'addDailyRecord');
+
+      if (txResult && typeof txResult === 'object' && 'code' in txResult && 'message' in txResult) {
+        const err = handleServiceError(txResult, 'completeEmptyCanReturnTransaction');
         showError(err.message);
         setSavingReturn(false);
         return;
       }
 
-      const stocks = await getStocks();
-      if (!Array.isArray(stocks)) {
-        const err = handleServiceError(stocks, 'getStocks');
-        showError(err.message);
-        setSavingReturn(false);
-        return;
-      }
-      const selectedStock = stocks.find(s => s.id === returnProduct);
-      if (!selectedStock) {
-        setSavingReturn(false);
-        return;
-      }
-      const nextExtraCan = Math.max((selectedStock.extraCan || 0) - qty, 0);
-      const nextEmpty = (selectedStock.empty || 0) + qty;
-      const stockUpdateResult = await updateStock(returnProduct, { extraCan: nextExtraCan, empty: nextEmpty });
-      if (stockUpdateResult !== true) {
-        const err = handleServiceError(stockUpdateResult, 'updateStock');
-        showError(err.message);
-        setSavingReturn(false);
-        return;
-      }
       await load();
       closeReturn();
     } catch (e) {
-      const err = handleServiceError(e, 'updateCustomer');
+      const err = handleServiceError(e, 'completeEmptyCanReturnTransaction');
       showError(err.message);
     } finally {
       setSavingReturn(false);

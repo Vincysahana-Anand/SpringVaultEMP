@@ -97,16 +97,18 @@ Common fields:
 ### `purchaseHistory`
 Currently: one document per customerId with an array of purchases.
 
-Schema:
-- `purchaseHistory/{customerId}`
-  - `purchases: PurchaseRecord[]`
+New schema:
+- `purchaseHistory/{customerId}/purchases/{purchaseId}`
+  - Each purchase is a separate document.
+  - Use `createdAt` or `deliveredAt` for ordering and pagination.
 
 ### `dailyRecord`
 Currently: one document per productId with dynamic fields per date.
 
-Schema:
-- `dailyRecord/{productId}`
-  - `YYYY-MM-DD: DailyRecordEntry[]`
+New schema:
+- `dailyRecord/{productId}/entries/{entryId}`
+  - Each delivery/payment record is a separate document.
+  - Store `date: YYYY-MM-DD` on each document so date queries work naturally.
 
 ## 5) “Delivery completion” transaction (end-to-end)
 Primary screen: `src/components/DeliveriesScreen.tsx`
@@ -117,11 +119,11 @@ Completing a delivery typically performs multiple writes:
 2. Update stock counts
    - `stocks/{productId}`: update `quantity`, `empty`, `extraCan`
 3. Append purchase history
-   - `purchaseHistory/{customerId}`: `arrayUnion(purchaseRecord)`
+   - `purchaseHistory/{customerId}/purchases/{purchaseId}`: write a separate purchase document
 4. Update daily sales aggregate
    - `sales/{YYYY-MM-DD}`: increment totals/counters
 5. Append daily record entry
-   - `dailyRecord/{productId}`: add entry to `YYYY-MM-DD` array
+   - `dailyRecord/{productId}/entries/{entryId}`: write a separate delivery/payment document with `date: YYYY-MM-DD`
 6. Update order status / remove order
    - depends on implementation; orders are treated as “pending” in places
 
@@ -179,7 +181,7 @@ This is the most important flow to keep consistent.
    - Purchase history:
      - `purchaseHistory/{customerId}/purchases/{purchaseId}` (one doc per purchase)
    - Daily records:
-     - `dailyRecord/{productId}/days/{YYYY-MM-DD}/entries/{entryId}`
+     - `dailyRecord/{productId}/entries/{entryId}` with `date: YYYY-MM-DD`
    Benefits:
    - No document-size blowups
    - Can query pages (limit/orderBy)

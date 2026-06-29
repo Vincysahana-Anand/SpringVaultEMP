@@ -8,7 +8,13 @@
  */
 
 /**
- * Get current date/time in IST
+ * Get current date/time in IST.
+ * 
+ * ⚠️ WARNING: This returns a Date object where the wall-clock hours/minutes
+ * match IST. However, its internal Unix timestamp is offset.
+ * Direct storage of this Date object in timezone-aware systems (like Firestore/Firebase)
+ * will result in double-offsetting if the client device is not physically in the +05:30 timezone.
+ * Assumes the client application runs on a device set to Indian Standard Time (IST).
  */
 export const getISTDate = (): Date => {
   const now = new Date();
@@ -70,4 +76,28 @@ export const getISTMonthEnd = (year: number, month: number): Date => {
   // month is 0-indexed, so month+1 gives us the 1st of next month
   const date = new Date(Date.UTC(year, month + 1, 1));
   return convertToIST(date);
+};
+
+/**
+ * Format Date to YYYY-MM-DD string
+ */
+export const formatDateKey = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+/**
+ * Format Date to standard human readable delivered timestamp
+ */
+export const formatDeliveredAt = (d: Date): string => {
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 };

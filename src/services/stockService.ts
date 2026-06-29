@@ -1,5 +1,5 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, setDoc, updateDoc, doc, increment } from '@react-native-firebase/firestore';
+import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, setDoc, updateDoc, doc, increment } from '@react-native-firebase/firestore';
 
 export interface Stock {
   id: string;
@@ -24,6 +24,20 @@ export const getStocks = async (): Promise<Stock[] | ServiceError> => {
   }
 };
 
+export const getStockById = async (id: string): Promise<Stock | null | ServiceError> => {
+  try {
+    const db = getFirestore();
+    const snapshot = await getDoc(doc(db, 'stocks', id));
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    return { id: snapshot.id, ...(snapshot.data() as Omit<Stock, 'id'>) } as Stock;
+  } catch (error) {
+    return handleServiceError(error, 'getStockById');
+  }
+};
+
 // ✅ Add a new stock product
 export const addStock = async (id: string, data: Stock): Promise<true | ServiceError> => {
   try {
@@ -36,12 +50,12 @@ export const addStock = async (id: string, data: Stock): Promise<true | ServiceE
 };
 
 // ✅ Atomically restock an existing product
-export const restockStock = async (id: string, qty: number, emt:number): Promise<true | ServiceError> => {
+export const restockStock = async (id: string, qty: number, newEmptyCount: number): Promise<true | ServiceError> => {
   try {
     const db = getFirestore();
     await updateDoc(doc(db, 'stocks', id), {
       quantity: increment(qty),
-      empty: emt
+      empty: newEmptyCount
     });
     return true;
   } catch (error) {

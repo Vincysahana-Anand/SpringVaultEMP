@@ -44,12 +44,12 @@ export default function CustomerPurchaseHistoryScreen({
       setLoading(false);
       return;
     }
+
     try {
       setLoading(true);
       const result = await getCustomerPurchaseHistory(customer.id);
       if (Array.isArray(result)) {
-        // Show latest entries (highest index) first
-        setPurchases([...result].reverse());
+        setPurchases(result);
       } else {
         const err = handleServiceError(result, 'getCustomerPurchaseHistory');
         showError(err.message);

@@ -19,11 +19,9 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getOrders, Order, addOrder, updateOrder, deleteOrder } from '../services/orderService';
-import { getStocks, Stock, updateStock } from '../services/stockService';
-import { getCustomers, Customer, updateCustomer } from '../services/customerService';
-import { addPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
-import { updateSalesRecord } from '../services/salesService';
-import { addDailyRecord, getDailyRecordsByDate, DailyRecordEntry } from '../services/dailyRecordService';
+import { getStocks, getStockById, Stock, updateStock } from '../services/stockService';
+import { getCustomerById, getCustomers, Customer, updateCustomer } from '../services/customerService';
+import { getDailyRecordsByDate, DailyRecordEntry } from '../services/dailyRecordService';
 import { completeDeliveryTransaction } from '../services/deliveryService';
 import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
@@ -74,6 +72,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [, setLoadingCustomers] = useState(false);
   const [selectedCustomerData, setSelectedCustomerData] = useState<Customer | null>(null);
+  const [selectedStockData, setSelectedStockData] = useState<Stock | null>(null);
   const [completedDeliveries, setCompletedDeliveries] = useState<DailyRecordEntry[]>([]);
   const [selectedCompletedDelivery, setSelectedCompletedDelivery] = useState<DailyRecordEntry | null>(null);
   const [showPendingFilterPage, setShowPendingFilterPage] = useState(false);
@@ -177,7 +176,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
   const parsedFullBottlesForBill = parseInt(fullBottlesDelivered || '0', 10) || 0;
   const billCustomerBalance = Number(selectedCustomerData?.balance ?? 0) || 0;
   const billStockPrice = Number(
-    products.find((p: Stock) => p.id === selectedOrder?.productId)?.price ?? 0
+    selectedStockData?.price ?? products.find((p: Stock) => p.id === selectedOrder?.productId)?.price ?? 0
   ) || 0;
   const billCustomerUnitPrice = getUnitPriceForCustomer(
     selectedCustomerData,
@@ -319,21 +318,25 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       setShowDeliveryPage(false);
     }
 
-    // Always fetch the latest customer data (including balance/price) for billing display
+    // Fetch only the customer and stock needed for this delivery.
     try {
-      const customersResult = await getCustomers();
-      if (Array.isArray(customersResult)) {
-        setCustomers(customersResult);
-        const found = customersResult.find((c) => c.id === order.customerId) || null;
-        setSelectedCustomerData(found);
-        console.log('Customer data loaded for billing:', {
-          name: found?.name,
-          balance: found?.balance,
-          price: found?.price,
-        });
-      } else {
-        const err = handleServiceError(customersResult, 'getCustomers');
+      const [customerResult, stockResult] = await Promise.all([
+        getCustomerById(order.customerId),
+        getStockById(order.productId),
+      ]);
+
+      if (customerResult && typeof customerResult === 'object' && 'code' in customerResult && 'message' in customerResult) {
+        const err = handleServiceError(customerResult, 'getCustomerById');
         showError(err.message);
+      } else {
+        setSelectedCustomerData(customerResult);
+      }
+
+      if (stockResult && typeof stockResult === 'object' && 'code' in stockResult && 'message' in stockResult) {
+        const err = handleServiceError(stockResult, 'getStockById');
+        showError(err.message);
+      } else {
+        setSelectedStockData(stockResult);
       }
     } catch (error) {
       const err = handleServiceError(error, 'loadCustomerForModal');
@@ -351,6 +354,7 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     setPaymentMethod('cash');
     setPaymentRef('');
     setSelectedCustomerData(null);
+    setSelectedStockData(null);
   };
 
   const handleSubmitDelivery = async () => {
@@ -379,17 +383,17 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     const amountPaidValue = Math.max(0, parseInt(amountPaid?.trim() || '0', 10) || 0);
     
     // Fetch customer data to get canHolding, extraCanHolding, price, and balance
-    let customer = customers.find((c) => c.id === selectedOrder.customerId);
+    let customer = selectedCustomerData || customers.find((c) => c.id === selectedOrder.customerId) || null;
     if (!customer) {
-      const customersResult = await getCustomers();
-      if (!Array.isArray(customersResult)) {
-        const err = handleServiceError(customersResult, 'getCustomers');
+      const customerResult = await getCustomerById(selectedOrder.customerId);
+      if (customerResult && typeof customerResult === 'object' && 'code' in customerResult && 'message' in customerResult) {
+        const err = handleServiceError(customerResult, 'getCustomerById');
         showError(err.message);
         setSubmitting(false);
         return;
       }
-      setCustomers(customersResult);
-      customer = customersResult.find((c) => c.id === selectedOrder.customerId);
+      customer = customerResult;
+      setSelectedCustomerData(customerResult);
     }
     
     if (!customer) {
@@ -399,7 +403,19 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     }
     
     // Fetch stock details for the product (used for both validation and pricing fallback)
-    const currentStock = products.find((p: Stock) => p.id === selectedOrder.productId);
+    let currentStock = selectedStockData || products.find((p: Stock) => p.id === selectedOrder.productId) || null;
+    if (!currentStock) {
+      const stockResult = await getStockById(selectedOrder.productId);
+      if (stockResult && typeof stockResult === 'object' && 'code' in stockResult && 'message' in stockResult) {
+        const err = handleServiceError(stockResult, 'getStockById');
+        showError(err.message);
+        setSubmitting(false);
+        return;
+      }
+      currentStock = stockResult;
+      setSelectedStockData(stockResult);
+    }
+
     if (!currentStock) {
       setSubmitting(false);
       showError('Stock not found for this product');
