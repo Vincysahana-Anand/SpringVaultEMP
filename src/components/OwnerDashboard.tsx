@@ -54,7 +54,6 @@ import { User } from '../services/userService';
 import ReportsScreen from './ReportsScreen';
 import VaultScreen from './VaultScreen';
 import UserProfileScreen from './UserProfileScreen';
-import OwnerAdminPage from './OwnerAdminPage';
 
 const logo = require('../assets/banner.png');
 
@@ -135,11 +134,6 @@ export default function OwnerDashboard() {
         return true;
       }
 
-      if (currentScreen === 'ownerAdmin') {
-        setCurrentScreen('profile');
-        return true;
-      }
-
       if (
         currentScreen === 'customers' ||
         currentScreen === 'partyOrders' ||
@@ -148,7 +142,6 @@ export default function OwnerDashboard() {
         currentScreen === 'addCustomer' ||
         currentScreen === 'users' ||
         currentScreen === 'profile' ||
-        currentScreen === 'ownerAdmin' ||
         currentScreen === 'reports' ||
         currentScreen === 'pastDeliveries' ||
         currentScreen === 'paymentBalances' ||
@@ -470,17 +463,11 @@ export default function OwnerDashboard() {
         ) : currentScreen === 'profile' ? (
           <UserProfileScreen
             allowEdit={true}
-            showAdminPageLink={true}
-            onOpenAdminPage={() => setCurrentScreen('ownerAdmin')}
             onBack={() => {
               setCurrentScreen('dashboard');
               setActiveTab('Home');
               fetchDashboardStats();
             }}
-          />
-        ) : currentScreen === 'ownerAdmin' ? (
-          <OwnerAdminPage
-            onBack={() => setCurrentScreen('profile')}
           />
         ) : currentScreen === 'users' ? (
           <UsersListScreen
