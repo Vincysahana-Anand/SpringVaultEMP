@@ -11,7 +11,11 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
-import { getCustomerPurchaseHistory, PurchaseRecord } from '../services/purchaseHistoryService';
+import {
+  getCustomerPurchaseHistoryPage,
+  PurchaseHistoryCursor,
+  PurchaseRecord,
+} from '../services/purchaseHistoryService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 
@@ -31,6 +35,9 @@ export default function CustomerPurchaseHistoryScreen({
 }: CustomerPurchaseHistoryScreenProps) {
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<PurchaseHistoryCursor>(null);
 
   useEffect(() => {
     if (!customer?.id) {
@@ -41,26 +48,54 @@ export default function CustomerPurchaseHistoryScreen({
   const loadHistory = useCallback(async () => {
     if (!customer?.id) {
       setPurchases([]);
+      setHasMore(false);
+      setNextCursor(null);
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      const result = await getCustomerPurchaseHistory(customer.id);
-      if (Array.isArray(result)) {
-        setPurchases(result);
+      const result = await getCustomerPurchaseHistoryPage(customer.id, 50, null);
+      if (result && typeof result === 'object' && 'records' in result) {
+        setPurchases(result.records);
+        setHasMore(result.hasMore);
+        setNextCursor(result.nextCursor);
       } else {
-        const err = handleServiceError(result, 'getCustomerPurchaseHistory');
+        const err = handleServiceError(result, 'getCustomerPurchaseHistoryPage');
         showError(err.message);
       }
     } catch (error) {
-      const err = handleServiceError(error, 'getCustomerPurchaseHistory');
+      const err = handleServiceError(error, 'getCustomerPurchaseHistoryPage');
       showError(err.message);
     } finally {
       setLoading(false);
     }
   }, [customer?.id]);
+
+  const loadMoreHistory = useCallback(async () => {
+    if (!customer?.id || !hasMore || !nextCursor || loading || loadingMore) {
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+      const result = await getCustomerPurchaseHistoryPage(customer.id, 50, nextCursor);
+      if (result && typeof result === 'object' && 'records' in result) {
+        setPurchases((prev) => [...prev, ...result.records]);
+        setHasMore(result.hasMore);
+        setNextCursor(result.nextCursor);
+      } else {
+        const err = handleServiceError(result, 'getCustomerPurchaseHistoryPage');
+        showError(err.message);
+      }
+    } catch (error) {
+      const err = handleServiceError(error, 'getCustomerPurchaseHistoryPage');
+      showError(err.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [customer?.id, hasMore, loading, loadingMore, nextCursor]);
 
   useEffect(() => {
     loadHistory();
@@ -144,13 +179,30 @@ export default function CustomerPurchaseHistoryScreen({
         ) : purchases.length === 0 ? (
           emptyState
         ) : (
-          <FlatList
-            data={purchases}
-            renderItem={renderPurchase}
-            keyExtractor={(_, index) => `${customer.id}-${index}`}
-            scrollEnabled={false}
-            contentContainerStyle={styles.listContent}
-          />
+          <>
+            <FlatList
+              data={purchases}
+              renderItem={renderPurchase}
+              keyExtractor={(_, index) => `${customer.id}-${index}`}
+              scrollEnabled={false}
+              contentContainerStyle={styles.listContent}
+            />
+
+            {hasMore ? (
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={loadMoreHistory}
+                disabled={loadingMore}
+                activeOpacity={0.8}
+              >
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color={colors.primary[600]} />
+                ) : (
+                  <Text style={styles.loadMoreText}>Load more</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+          </>
         )}
 
         <View style={{ height: spacing[12] }} />
@@ -274,5 +326,19 @@ const styles = StyleSheet.create({
   },
   loaderContainer: {
     paddingVertical: spacing[16],
+  },
+  loadMoreButton: {
+    marginTop: spacing[12],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[10],
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.bg.white,
+    ...elevation.sm,
+  },
+  loadMoreText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
 });

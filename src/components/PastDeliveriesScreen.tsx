@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, BackHandler, Platform, RefreshControl } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { DailyRecordEntry, getDailyRecordsByDate } from '../services/dailyRecordService';
+import {
+  DailyRecordCursor,
+  DailyRecordEntry,
+  getDailyRecordsByDatePage,
+} from '../services/dailyRecordService';
 import { Customer, getCustomers } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
@@ -16,7 +20,10 @@ interface Props {
 
 export default function PastDeliveriesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [entries, setEntries] = useState<DailyRecordEntry[]>([]);
+  const [nextCursor, setNextCursor] = useState<DailyRecordCursor>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
@@ -71,28 +78,47 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
     }
   };
 
-  const loadEntries = async (date: Date) => {
+  const loadEntries = async (date: Date, reset = true) => {
+    if (!reset && (!hasMore || !nextCursor || loadingMore || loading)) {
+      return;
+    }
+
     try {
-      setLoading(true);
-      const dateKey = formatDateKey(date);
-      const res = await getDailyRecordsByDate(dateKey);
-      if (Array.isArray(res)) {
-        const sorted = [...res].sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
-        setEntries(sorted);
+      if (reset) {
+        setLoading(true);
       } else {
-        const err = handleServiceError(res, 'getDailyRecordsByDate');
+        setLoadingMore(true);
+      }
+
+      const dateKey = formatDateKey(date);
+      const res = await getDailyRecordsByDatePage(dateKey, 100, reset ? null : nextCursor);
+      if (res && typeof res === 'object' && 'entries' in res) {
+        const merged = reset ? res.entries : [...entries, ...res.entries];
+        const sorted = [...merged].sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
+        setEntries(sorted);
+        setNextCursor(res.nextCursor);
+        setHasMore(res.hasMore);
+      } else {
+        const err = handleServiceError(res, 'getDailyRecordsByDatePage');
         showError(err.message);
       }
     } catch (e) {
-      const err = handleServiceError(e, 'getDailyRecordsByDate');
+      const err = handleServiceError(e, 'getDailyRecordsByDatePage');
       showError(err.message);
     } finally {
-      setLoading(false);
+      if (reset) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadEntries(selectedDate);
+    setEntries([]);
+    setNextCursor(null);
+    setHasMore(false);
+    loadEntries(selectedDate, true);
   }, [selectedDate]);
 
   useEffect(() => {
@@ -260,12 +286,25 @@ export default function PastDeliveriesScreen({ onBack }: Props) {
               refreshing={refreshing}
               onRefresh={async () => {
                 setRefreshing(true);
-                await loadEntries(selectedDate);
+                await loadEntries(selectedDate, true);
                 setRefreshing(false);
               }}
               colors={["#0ea5e9"]}
               tintColor="#0ea5e9"
             />
+          }
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (!loadingMore && hasMore) {
+              loadEntries(selectedDate, false);
+            }
+          }}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 12 }}>
+                <ActivityIndicator size="small" color="#0ea5e9" />
+              </View>
+            ) : null
           }
         />
       )}

@@ -12,7 +12,11 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { DailyRecordEntry, getDailyRecord } from '../services/dailyRecordService';
+import {
+  DailyRecordCursor,
+  DailyRecordEntry,
+  getDailyRecordPage,
+} from '../services/dailyRecordService';
 import { getISTDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
@@ -53,7 +57,10 @@ const formatDisplayDate = (date: Date) => {
 
 export default function ExtraCanHistoryScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [entries, setEntries] = useState<DailyRecordEntry[]>([]);
+  const [nextCursor, setNextCursor] = useState<DailyRecordCursor>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const today = getISTDate();
     today.setHours(0, 0, 0, 0);
@@ -79,30 +86,53 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
     return () => sub.remove();
   }, [onBack, selectedCustomer]);
 
-  const loadEntries = async (date: Date) => {
+  const loadEntries = async (date: Date, reset = true) => {
+    if (!reset && (!hasMore || !nextCursor || loading || loadingMore)) {
+      return;
+    }
+
     try {
-      setLoading(true);
-      const res = await getDailyRecord(EMPTY_RETURNED_DOC_ID, formatDateKey(date));
-      if (Array.isArray(res)) {
-        const onlyReturns = res
+      if (reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const res = await getDailyRecordPage(
+        EMPTY_RETURNED_DOC_ID,
+        formatDateKey(date),
+        100,
+        reset ? null : nextCursor,
+      );
+      if (res && typeof res === 'object' && 'entries' in res) {
+        const merged = reset ? res.entries : [...entries, ...res.entries];
+        const onlyReturns = merged
           .filter((e) => (e.emptyQty || 0) > 0)
           .sort((a, b) => parseDeliveredAt(b.deliveredAt) - parseDeliveredAt(a.deliveredAt));
-        const sorted = onlyReturns;
-        setEntries(sorted);
+        setEntries(onlyReturns);
+        setNextCursor(res.nextCursor);
+        setHasMore(res.hasMore);
       } else {
-        const err = handleServiceError(res, 'getDailyRecord');
+        const err = handleServiceError(res, 'getDailyRecordPage');
         showError(err.message);
       }
     } catch (e) {
-      const err = handleServiceError(e, 'getDailyRecord');
+      const err = handleServiceError(e, 'getDailyRecordPage');
       showError(err.message);
     } finally {
-      setLoading(false);
+      if (reset) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadEntries(selectedDate);
+    setEntries([]);
+    setNextCursor(null);
+    setHasMore(false);
+    loadEntries(selectedDate, true);
   }, [selectedDate]);
 
   const totals = useMemo(() => {
@@ -259,12 +289,25 @@ export default function ExtraCanHistoryScreen({ onBack }: Props) {
               refreshing={refreshing}
               onRefresh={async () => {
                 setRefreshing(true);
-                await loadEntries(selectedDate);
+                await loadEntries(selectedDate, true);
                 setRefreshing(false);
               }}
               colors={["#8b5cf6"]}
               tintColor="#8b5cf6"
             />
+          }
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (!loadingMore && hasMore) {
+              loadEntries(selectedDate, false);
+            }
+          }}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 12 }}>
+                <ActivityIndicator size="small" color="#8b5cf6" />
+              </View>
+            ) : null
           }
         />
       )}
