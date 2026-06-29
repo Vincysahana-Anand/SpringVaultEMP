@@ -12,23 +12,19 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { createUserWithAuthAndProfile } from '../services/userService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
-
-const colors = {
-  primary: { 50: '#f5f7ff', 200: '#d6e4f7', 500: '#5b9eff', 600: '#4a8ce6' },
-  gray: {
-    50: '#fafbfc',
-    100: '#f1f3f7',
-    200: '#e8ecf4',
-    400: '#9ca3b5',
-    600: '#525966',
-    700: '#3a4150',
-    800: '#1e2936',
-  },
-  border: '#d5dce9',
-  bg: { white: '#ffffff', light: '#f5f7fa' },
-};
+import { colors } from '../shared/theme/theme';
+import { useFormState } from '../shared/hooks/useFormState';
 
 const ROLES = ['Owner', 'Employee', 'Customer'];
+
+const USER_FORM_INITIAL = {
+  name: '',
+  phone: '',
+  email: '',
+  role: 'Employee',
+  password: '',
+  confirmPassword: '',
+};
 
 type Props = {
   onBack: () => void;
@@ -36,22 +32,17 @@ type Props = {
 };
 
 export default function AddUserScreen({ onBack, onSaved }: Props) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<string>('Employee');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const { values: form, setValue } = useFormState(USER_FORM_INITIAL);
   const [saving, setSaving] = useState(false);
 
-  const normalizedEmail = useMemo(() => String(email || '').trim().toLowerCase(), [email]);
+  const normalizedEmail = useMemo(() => String(form.email || '').trim().toLowerCase(), [form.email]);
 
   const validate = () => {
-    if (!name.trim()) {
+    if (!form.name.trim()) {
       showError('Enter name', { title: 'Validation' });
       return false;
     }
-    if (!phone.trim()) {
+    if (!form.phone.trim()) {
       showError('Enter mobile number', { title: 'Validation' });
       return false;
     }
@@ -59,15 +50,15 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
       showError('Enter a valid email', { title: 'Validation' });
       return false;
     }
-    if (!role.trim()) {
+    if (!form.role.trim()) {
       showError('Select role', { title: 'Validation' });
       return false;
     }
-    if (password.length < 6) {
+    if (form.password.length < 6) {
       showError('Password must be at least 6 characters', { title: 'Validation' });
       return false;
     }
-    if (password !== confirmPassword) {
+    if (form.password !== form.confirmPassword) {
       showError('Password and confirm password do not match', { title: 'Validation' });
       return false;
     }
@@ -81,13 +72,13 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
     try {
       setSaving(true);
       const res = await createUserWithAuthAndProfile({
-        name,
-        phone,
+        name: form.name,
+        phone: form.phone,
         email: normalizedEmail,
-        role,
-        password,
+        role: form.role,
+        password: form.password,
         isActive: true,
-        isAdmin: role === 'Owner',
+        isAdmin: form.role === 'Owner',
       });
 
       if (res && typeof res === 'object' && 'code' in res && 'message' in res) {
@@ -112,15 +103,15 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Name</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={colors.gray[400]} />
+        <TextInput style={styles.input} value={form.name} onChangeText={(v) => setValue('name', v)} placeholder="Full name" placeholderTextColor={colors.gray[400]} />
       </View>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Mobile</Text>
         <TextInput
           style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
+          value={form.phone}
+          onChangeText={(v) => setValue('phone', v)}
           placeholder="Mobile number"
           placeholderTextColor={colors.gray[400]}
           keyboardType="phone-pad"
@@ -131,8 +122,8 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
         <Text style={styles.label}>Email</Text>
         <TextInput
           style={styles.input}
-          value={email}
-          onChangeText={setEmail}
+          value={form.email}
+          onChangeText={(v) => setValue('email', v)}
           placeholder="Email"
           placeholderTextColor={colors.gray[400]}
           autoCapitalize="none"
@@ -144,8 +135,8 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
         <Text style={styles.label}>Role</Text>
         <View style={styles.badgeRow}>
           {ROLES.map((r) => (
-            <TouchableOpacity key={r} style={[styles.badge, role === r && styles.badgeActive]} onPress={() => setRole(r)}>
-              <Text style={[styles.badgeText, role === r && styles.badgeTextActive]}>{r}</Text>
+            <TouchableOpacity key={r} style={[styles.badge, form.role === r && styles.badgeActive]} onPress={() => setValue('role', r)}>
+              <Text style={[styles.badgeText, form.role === r && styles.badgeTextActive]}>{r}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -155,8 +146,8 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
         <Text style={styles.label}>Password</Text>
         <TextInput
           style={styles.input}
-          value={password}
-          onChangeText={setPassword}
+          value={form.password}
+          onChangeText={(v) => setValue('password', v)}
           placeholder="Minimum 6 characters"
           placeholderTextColor={colors.gray[400]}
           secureTextEntry
@@ -167,8 +158,8 @@ export default function AddUserScreen({ onBack, onSaved }: Props) {
         <Text style={styles.label}>Confirm Password</Text>
         <TextInput
           style={styles.input}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
+          value={form.confirmPassword}
+          onChangeText={(v) => setValue('confirmPassword', v)}
           placeholder="Re-enter password"
           placeholderTextColor={colors.gray[400]}
           secureTextEntry

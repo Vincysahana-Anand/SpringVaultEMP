@@ -5,7 +5,7 @@ import {
 } from '@react-native-firebase/firestore';
 
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import { getISTDate, formatDateKey, formatDeliveredAt } from '../utils/dateUtils';
+import { getTransactionTimestamp } from '../utils/dateUtils';
 import { DailyRecordEntry, PurchaseRecord } from '../types';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
 import { createDailyRecordEntryTransaction } from './dailyRecordService';
@@ -43,9 +43,7 @@ export async function completePaymentTransaction(
     }
 
     const db = getFirestore();
-    const deliveredDate = getISTDate();
-    const deliveredAt = formatDeliveredAt(deliveredDate);
-    const dateKey = formatDateKey(deliveredDate);
+    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
     const newBalance = startingBalance - amount;
 
     const customerRef = doc(db, 'customers', customerId);

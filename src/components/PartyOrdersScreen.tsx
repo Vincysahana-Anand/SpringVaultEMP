@@ -34,7 +34,7 @@ import {
 } from '../services/partyOrderService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { currencyINR } from '../utils/format';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
 import DropletLoader from './DropletLoader';
@@ -101,13 +101,6 @@ export default function PartyOrdersScreen({
   const [submittingEditPartyOrder, setSubmittingEditPartyOrder] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
-
-  const formatDateKey = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
 
   const openPurchaseHistory = (customer: Customer | null) => {
     const id = customer?.id;

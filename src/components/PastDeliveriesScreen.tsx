@@ -9,7 +9,7 @@ import {
 import { Customer, getCustomers } from '../services/customerService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey, parseDeliveredAt, formatDisplayDate } from '../utils/dateUtils';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
@@ -425,29 +425,4 @@ const matchesProduct = (
   if (productKey.includes(targetLabel) || targetLabel.includes(productKey)) return true;
 
   return false;
-};
-
-const formatDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const parseDeliveredAt = (value: string) => {
-  // deliveredAt stored as "dd/mm/yy, hh:mm AM/PM"
-  if (!value) return 0;
-  const [datePartRaw, timePartRaw] = value.split(',').map(v => v.trim());
-  if (!datePartRaw) return 0;
-  const [dd, mm, yy] = datePartRaw.split('/').map(v => parseInt(v, 10));
-  const [time, meridiem] = (timePartRaw || '').split(' ');
-  const [hh, min] = (time || '').split(':').map(v => parseInt(v, 10));
-  const hours24 = (meridiem?.toLowerCase() === 'pm' && hh !== 12 ? hh + 12 : hh === 12 && meridiem?.toLowerCase() === 'am' ? 0 : hh) || 0;
-  const fullYear = yy < 50 ? 2000 + yy : 1900 + yy;
-  const dateObj = new Date(fullYear, (mm || 1) - 1, dd || 1, hours24, min || 0, 0);
-  return dateObj.getTime();
-};
-
-const formatDisplayDate = (date: Date) => {
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };

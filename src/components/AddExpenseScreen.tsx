@@ -7,14 +7,7 @@ import { getVaultRecord, setVaultRecord, VaultRecord } from '../services/vaultSe
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { getISTDate } from '../utils/dateUtils';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
-
-const colors = {
-  primary: { 50: '#f5f7ff', 200: '#d6e4f7', 500: '#5b9eff', 600: '#4a8ce6' },
-  success: { 600: '#4ade80' },
-  gray: { 50: '#fafbfc', 100: '#f1f3f7', 150: '#eef1f7', 200: '#e8ecf4', 300: '#d5dce9', 400: '#9ca3b5', 500: '#6b7280', 600: '#525966', 700: '#3a4150', 800: '#1e2936', 900: '#0f1419' },
-  border: '#d5dce9',
-  bg: { white: '#ffffff', light: '#f5f7fa' },
-};
+import { colors } from '../shared/theme/theme';
 
 const TYPES = ['Shop Rent', 'Withdraw', 'Petrol', 'Diesel', 'Food', 'Salary', 'Load', 'Loan', 'Other'];
 

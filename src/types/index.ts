@@ -89,6 +89,12 @@ export interface Expense {
   createdAt: Date;
 }
 
+export interface VaultRecord {
+  cash: number;
+  online: number;
+  total: number;
+}
+
 export interface PurchaseRecord {
   product: string;
   deliveredQty: number;

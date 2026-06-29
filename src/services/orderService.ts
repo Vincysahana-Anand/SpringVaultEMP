@@ -1,45 +1,25 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import {
-  FirebaseFirestoreTypes,
   getFirestore,
   collection,
-  getDocs,
-  query,
-  orderBy,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   doc,
+  orderBy,
   runTransaction,
 } from '@react-native-firebase/firestore';
 import { Order } from '../types';
 import { getISTDate, formatDateKey } from '../utils/dateUtils';
 import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { createRepository } from './firestoreRepository';
 
 export type { Order } from '../types';
 
-export const getOrders = async (): Promise<Order[] | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const ordersQuery = query(collection(db, 'orders'), orderBy('timeStamp', 'asc'));
-    const snapshot = await getDocs(ordersQuery);
-    return snapshot.docs.map((orderDoc: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({
-      id: orderDoc.id,
-      ...orderDoc.data(),
-    } as Order));
-  } catch (error) {
-    return handleServiceError(error, 'getOrders');
-  }
-};
+const ordersRepo = createRepository<Order>('orders', [orderBy('timeStamp', 'asc')]);
+
+export const getOrders = () => ordersRepo.getAll();
 
 export const addOrder = async (order: Order): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await addDoc(collection(db, 'orders'), order);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'addOrder');
-  }
+  const result = await ordersRepo.add(order);
+  return typeof result === 'string' ? true : result;
 };
 
 /**
@@ -70,22 +50,6 @@ export const placeOrderTransaction = async (
   }
 };
 
-export const updateOrder = async (id: string, data: Partial<Order>): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await updateDoc(doc(db, 'orders', id), data);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'updateOrder');
-  }
-};
+export const updateOrder = (id: string, data: Partial<Order>) => ordersRepo.update(id, data);
 
-export const deleteOrder = async (id: string): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await deleteDoc(doc(db, 'orders', id));
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'deleteOrder');
-  }
-};
+export const deleteOrder = (id: string) => ordersRepo.delete(id);

@@ -1,13 +1,9 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, query, where, addDoc } from '@react-native-firebase/firestore';
 import { getISTDate, getISTStartOfDay, getISTDaysAgo, getISTMonthStart, getISTMonthEnd } from '../utils/dateUtils';
+import type { Expense } from '../types';
 
-export interface Expense {
-  id?: string;
-  type: string;
-  amount: number;
-  createdAt: Date;
-}
+export type { Expense } from '../types';
 
 // Define accepted filter types
 export type FilterType =

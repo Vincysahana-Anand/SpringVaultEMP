@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { currencyINR } from '../utils/format';
 import { getISTDate } from '../utils/dateUtils';
 import { colors, spacing, typography, borderRadius, elevation } from '../shared/theme/theme';
 import { showError, showInfo, showSuccess } from '../shared/feedback/messageBus';
+import { useListScreen } from '../shared/hooks/useListScreen';
 import DropletLoader from './DropletLoader';
 import CustomerDetailsScreen from './CustomerDetailsScreen';
 import EditCustomerScreen from './EditCustomerScreen';
@@ -41,10 +42,33 @@ export default function CustomersListScreen({
   userRole = 'employee',
   isAdmin = false,
 }: CustomersListScreenProps) {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const customerFilter = useCallback(
+    (customer: Customer, query: string) => {
+      const q = query.toLowerCase();
+      if (customer.name?.toLowerCase().includes(q)) return true;
+      if (customer.mobile?.includes(q)) return true;
+      const fullAddress = [customer.doorNumber, customer.floor, customer.street, customer.area]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (fullAddress.includes(q)) return true;
+      if (customer.alternateContacts?.some((c) => c.includes(q))) return true;
+      return false;
+    },
+    [],
+  );
+
+  const {
+    filteredData: filteredCustomers,
+    setData: setCustomers,
+    searchQuery,
+    setSearchQuery,
+    loading,
+    refreshing,
+    refresh: refreshCustomers,
+    reload: loadCustomers,
+  } = useListScreen<Customer>(getCustomers, customerFilter);
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showOrderPage, setShowOrderPage] = useState(false);
@@ -66,7 +90,6 @@ export default function CustomersListScreen({
   };
 
   useEffect(() => {
-    loadCustomers();
     loadProducts();
   }, []);
 
@@ -88,25 +111,6 @@ export default function CustomersListScreen({
     return () => backHandler.remove();
   }, [selectedCustomer, showOrderPage]);
 
-  useEffect(() => {
-    filterCustomers();
-  }, [searchQuery, customers]);
-
-  const loadCustomers = async () => {
-    try {
-      setLoading(true);
-      const result = await getCustomers();
-      const customersData = Array.isArray(result) ? result : [];
-      setCustomers(customersData as Customer[]);
-      setFilteredCustomers(customersData as Customer[]);
-    } catch (e) {
-      const err = handleServiceError(e, 'loadCustomers');
-      showError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadProducts = async () => {
     try {
       setLoadingProducts(true);
@@ -126,50 +130,6 @@ export default function CustomersListScreen({
     } finally {
       setLoadingProducts(false);
     }
-  };
-
-  const filterCustomers = () => {
-    if (!searchQuery.trim()) {
-      setFilteredCustomers(customers);
-      return;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = customers.filter((customer) => {
-      // Search by name
-      if (customer.name?.toLowerCase().includes(query)) {
-        return true;
-      }
-
-      // Search by mobile
-      if (customer.mobile?.includes(query)) {
-        return true;
-      }
-
-      // Search by address components
-      const fullAddress = [
-        customer.doorNumber,
-        customer.floor,
-        customer.street,
-        customer.area,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      if (fullAddress.includes(query)) {
-        return true;
-      }
-
-      // Search by alternate contacts
-      if (customer.alternateContacts?.some((contact) => contact.includes(query))) {
-        return true;
-      }
-
-      return false;
-    });
-
-    setFilteredCustomers(filtered);
   };
 
   const getFullAddress = (customer: Customer) => {
@@ -550,7 +510,6 @@ export default function CustomersListScreen({
               allowDelete={allowCustomerDelete}
               onDeleted={(customerId) => {
                 setCustomers((prev) => prev.filter((c) => c.id !== customerId));
-                setFilteredCustomers((prev) => prev.filter((c) => c.id !== customerId));
               }}
             />
           )}
@@ -604,7 +563,7 @@ export default function CustomersListScreen({
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               refreshControl={
-                <RefreshControl refreshing={loading} onRefresh={loadCustomers} />
+                <RefreshControl refreshing={refreshing} onRefresh={refreshCustomers} />
               }
             />
           ) : null}

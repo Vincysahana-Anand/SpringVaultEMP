@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,23 +14,8 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { deleteUser, getUsers, User } from '../services/userService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
-
-const colors = {
-  primary: { 50: '#f5f7ff', 200: '#d6e4f7', 500: '#5b9eff', 600: '#4a8ce6' },
-  gray: {
-    50: '#fafbfc',
-    100: '#f1f3f7',
-    200: '#e8ecf4',
-    400: '#9ca3b5',
-    600: '#525966',
-    700: '#3a4150',
-    800: '#1e2936',
-  },
-  border: '#d5dce9',
-  bg: { white: '#ffffff', light: '#f5f7fa' },
-  success: '#16a34a',
-  danger: '#ef4444',
-};
+import { colors } from '../shared/theme/theme';
+import { useListScreen } from '../shared/hooks/useListScreen';
 
 type Props = {
   onBack: () => void;
@@ -39,58 +24,38 @@ type Props = {
   refreshKey?: number;
 };
 
+const userFilter = (u: User, q: string) => {
+  const needle = q.trim().toLowerCase();
+  return (
+    String(u.name || '').toLowerCase().includes(needle) ||
+    String(u.email || '').toLowerCase().includes(needle) ||
+    String(u.phone || '').toLowerCase().includes(needle) ||
+    String(u.role || '').toLowerCase().includes(needle)
+  );
+};
+
 export default function UsersListScreen({ onBack, onAdd, onSelectUser, refreshKey = 0 }: Props) {
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [query, setQuery] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const {
+    filteredData: filteredUsers,
+    setData: setUsers,
+    loading,
+    refreshing,
+    searchQuery: query,
+    setSearchQuery: setQuery,
+    refresh: onRefresh,
+    reload: fetchUsers,
+  } = useListScreen<User>(getUsers, userFilter);
 
-  const isServiceError = (res: any): res is { code: string; message: string } => {
-    return !!(res && typeof res === 'object' && 'code' in res && 'message' in res);
-  };
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      const res = await getUsers();
-      if (isServiceError(res)) {
-        const err = handleServiceError(res, 'getUsers');
-        showError(err.message);
-        setUsers([]);
-        return;
-      }
-      setUsers(res);
-    } catch (e) {
-      const err = handleServiceError(e, 'getUsers');
-      showError(err.message);
-    }
-  }, []);
-
+  // Re-fetch when the parent signals a data change via refreshKey.
+  const prevRefreshKeyRef = useRef(refreshKey);
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await fetchUsers();
-      setLoading(false);
-    })();
-  }, [fetchUsers, refreshKey]);
-
-  const filteredUsers = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter((u) => {
-      const name = String(u.name || '').toLowerCase();
-      const email = String(u.email || '').toLowerCase();
-      const phone = String(u.phone || '').toLowerCase();
-      const role = String(u.role || '').toLowerCase();
-      return name.includes(needle) || email.includes(needle) || phone.includes(needle) || role.includes(needle);
-    });
-  }, [users, query]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchUsers();
-    setRefreshing(false);
-  }, [fetchUsers]);
+    if (prevRefreshKeyRef.current !== refreshKey) {
+      prevRefreshKeyRef.current = refreshKey;
+      fetchUsers();
+    }
+  }, [refreshKey, fetchUsers]);
 
   const roleIconName = (roleValue: string) => {
     const r = String(roleValue || '').toLowerCase();
@@ -179,7 +144,7 @@ export default function UsersListScreen({ onBack, onAdd, onSelectUser, refreshKe
             filteredUsers.map((u) => {
               const role = String(u.role || '-');
               const isActive = !!u.isActive;
-              const iconColor = isActive ? colors.success : colors.danger;
+              const iconColor = isActive ? colors.success[600] : colors.danger[500];
               return (
                 <TouchableOpacity
                   key={u.id || `${u.email}-${u.phone}`}
@@ -204,9 +169,9 @@ export default function UsersListScreen({ onBack, onAdd, onSelectUser, refreshKe
                         disabled={!u.id || deletingId === u.id}
                       >
                         {deletingId === u.id ? (
-                          <ActivityIndicator size="small" color={colors.danger} />
+                          <ActivityIndicator size="small" color={colors.danger[500]} />
                         ) : (
-                          <MaterialCommunityIcons name="delete-outline" size={22} color={colors.danger} />
+                          <MaterialCommunityIcons name="delete-outline" size={22} color={colors.danger[500]} />
                         )}
                       </TouchableOpacity>
                     </View>
@@ -224,13 +189,13 @@ export default function UsersListScreen({ onBack, onAdd, onSelectUser, refreshKe
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg.white },
+  container: { flex: 1, backgroundColor: '#ffffff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: colors.bg.light,
+    backgroundColor: colors.gray[100],
   },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '600', color: colors.gray[800] },
@@ -253,7 +218,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.gray[300],
     borderRadius: 10,
     backgroundColor: colors.gray[50],
   },
@@ -266,7 +231,7 @@ const styles = StyleSheet.create({
   userCard: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.gray[300],
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
@@ -285,7 +250,7 @@ const styles = StyleSheet.create({
   emptyCard: {
     backgroundColor: colors.gray[50],
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.gray[300],
     borderRadius: 12,
     padding: 18,
     alignItems: 'center',

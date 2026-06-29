@@ -41,7 +41,7 @@ import PaymentBalancesScreen from './PaymentBalancesScreen';
 import ExtraCanHoldingsScreen from './ExtraCanHoldingsScreen';
 import PastSalesScreen from './PastSalesScreen';
 import PastExpensesScreen from './PastExpensesScreen';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey } from '../utils/dateUtils';
 import { getOrders } from '../services/orderService';
 import DropletLoader from './DropletLoader';
 import CounterSaleScreen from './CounterSaleScreen';
@@ -189,13 +189,6 @@ export default function OwnerDashboard() {
       showError(err.message);
       setSigningOut(false);
     }
-  };
-
-  const formatDateKey = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
   };
 
   const isServiceError = (res: any): res is { code: string; message: string } => {

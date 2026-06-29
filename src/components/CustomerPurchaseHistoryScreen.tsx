@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,8 @@ import {
   PurchaseHistoryCursor,
   PurchaseRecord,
 } from '../services/purchaseHistoryService';
-import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
+import { usePaginatedList } from '../shared/hooks/usePaginatedList';
 
 interface Customer {
   id?: string;
@@ -33,73 +33,32 @@ export default function CustomerPurchaseHistoryScreen({
   customer,
   onBack,
 }: CustomerPurchaseHistoryScreenProps) {
-  const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<PurchaseHistoryCursor>(null);
+  const fetchPage = useCallback(
+    (cursor: PurchaseHistoryCursor) => {
+      if (!customer?.id) {
+        return Promise.resolve({ records: [], nextCursor: null as PurchaseHistoryCursor, hasMore: false });
+      }
+      return getCustomerPurchaseHistoryPage(customer.id, 50, cursor);
+    },
+    [customer?.id],
+  );
+
+  const {
+    items: purchases,
+    loading,
+    loadingMore,
+    hasMore,
+    load: loadHistory,
+    loadMore: loadMoreHistory,
+  } = usePaginatedList<PurchaseRecord, PurchaseHistoryCursor>(fetchPage);
 
   useEffect(() => {
     if (!customer?.id) {
       showError('Unable to open purchase history. Customer id is missing.');
-    }
-  }, [customer?.id]);
-
-  const loadHistory = useCallback(async () => {
-    if (!customer?.id) {
-      setPurchases([]);
-      setHasMore(false);
-      setNextCursor(null);
-      setLoading(false);
       return;
     }
-
-    try {
-      setLoading(true);
-      const result = await getCustomerPurchaseHistoryPage(customer.id, 50, null);
-      if (result && typeof result === 'object' && 'records' in result) {
-        setPurchases(result.records);
-        setHasMore(result.hasMore);
-        setNextCursor(result.nextCursor);
-      } else {
-        const err = handleServiceError(result, 'getCustomerPurchaseHistoryPage');
-        showError(err.message);
-      }
-    } catch (error) {
-      const err = handleServiceError(error, 'getCustomerPurchaseHistoryPage');
-      showError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [customer?.id]);
-
-  const loadMoreHistory = useCallback(async () => {
-    if (!customer?.id || !hasMore || !nextCursor || loading || loadingMore) {
-      return;
-    }
-
-    try {
-      setLoadingMore(true);
-      const result = await getCustomerPurchaseHistoryPage(customer.id, 50, nextCursor);
-      if (result && typeof result === 'object' && 'records' in result) {
-        setPurchases((prev) => [...prev, ...result.records]);
-        setHasMore(result.hasMore);
-        setNextCursor(result.nextCursor);
-      } else {
-        const err = handleServiceError(result, 'getCustomerPurchaseHistoryPage');
-        showError(err.message);
-      }
-    } catch (error) {
-      const err = handleServiceError(error, 'getCustomerPurchaseHistoryPage');
-      showError(err.message);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [customer?.id, hasMore, loading, loadingMore, nextCursor]);
-
-  useEffect(() => {
     loadHistory();
-  }, [loadHistory]);
+  }, [customer?.id, loadHistory]);
 
   const renderPurchase = ({ item }: { item: PurchaseRecord }) => (
     <View style={styles.card}>

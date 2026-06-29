@@ -17,16 +17,9 @@ import {
 } from '@react-native-firebase/firestore';
 import type { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
+import type { User } from '../types';
 
-export interface User {
-    id?: string;
-    name: string;
-    email: string;
-    phone: string;
-    isAdmin: boolean;
-    isActive: boolean;
-    role?: string;
-}
+export type { User } from '../types';
 
 const usersCollection = collection(getFirestore(), 'users');
 

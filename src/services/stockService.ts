@@ -1,15 +1,8 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, setDoc, updateDoc, doc, increment } from '@react-native-firebase/firestore';
+import type { Stock } from '../types';
 
-export interface Stock {
-  id: string;
-  productName: string;
-  quantity: number;
-  price?: number; // Price per unit
-  empty?: number; // Only for 20L can & party can
-  total?: number; // Optional, can be used for total stock
-  extraCan?: number;
-}
+export type { Stock } from '../types';
 
 // ✅ Fetch all stocks
 export const getStocks = async (): Promise<Stock[] | ServiceError> => {

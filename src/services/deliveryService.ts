@@ -8,7 +8,7 @@ import {
 
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import { Order } from './orderService';
-import { getISTDate, formatDateKey, formatDeliveredAt } from '../utils/dateUtils';
+import { getTransactionTimestamp } from '../utils/dateUtils';
 import { DailyRecordEntry, PurchaseRecord } from '../types';
 import { getUnitPriceForCustomer } from '../shared/business/pricing';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
@@ -43,9 +43,7 @@ export async function completeDeliveryTransaction(
 
     const db = getFirestore();
 
-    const deliveredDate = getISTDate();
-    const deliveredAt = formatDeliveredAt(deliveredDate);
-    const dateKey = formatDateKey(deliveredDate);
+    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
 
     const orderRef = doc(db, 'orders', order.id);
     const customerRef = doc(db, 'customers', order.customerId);

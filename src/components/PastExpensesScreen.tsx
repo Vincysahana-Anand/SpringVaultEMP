@@ -5,7 +5,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { getExpenses, Expense } from '../services/expenseService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey, formatDisplayDate } from '../utils/dateUtils';
 
 interface Props { onBack?: () => void; }
 
@@ -224,16 +224,5 @@ const styles = StyleSheet.create({
 const toDateSafe = (value: any): Date => {
   if ((value as any)?.toDate) return (value as any).toDate();
   return new Date(value);
-};
-
-const formatDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const formatDisplayDate = (date: Date) => {
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 

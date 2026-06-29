@@ -1,23 +1,17 @@
 import {
-  FirebaseFirestoreTypes,
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  getFirestore,
-  orderBy,
-  query,
   runTransaction,
-  updateDoc,
+  getFirestore,
+  doc,
+  orderBy,
 } from '@react-native-firebase/firestore';
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import { getISTDate, formatDateKey, formatDeliveredAt } from '../utils/dateUtils';
+import { getTransactionTimestamp } from '../utils/dateUtils';
 import { DailyRecordEntry, PartyDelivery, PartyOrder, PurchaseRecord } from '../types';
 import { getUnitPriceForPartyOrder } from '../shared/business/pricing';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
 import { createDailyRecordEntryTransaction } from './dailyRecordService';
 import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { createRepository } from './firestoreRepository';
 
 export type { PartyOrder, PartyDelivery } from '../types';
 
@@ -26,70 +20,27 @@ export type CompletePartyDeliveryParams = {
   deliveredQty: number;
 };
 
+const partyOrdersRepo = createRepository<PartyOrder>('partyOrders', [orderBy('requestedDate', 'asc')]);
+const partyDeliveriesRepo = createRepository<PartyDelivery>('partyDeliveries', [orderBy('timeStamp', 'desc')]);
+
 export const addPartyOrder = async (order: PartyOrder): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await addDoc(collection(db, 'partyOrders'), order);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'addPartyOrder');
-  }
+  const result = await partyOrdersRepo.add(order);
+  return typeof result === 'string' ? true : result;
 };
 
-export const getPartyOrders = async (): Promise<PartyOrder[] | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const ordersQuery = query(collection(db, 'partyOrders'), orderBy('requestedDate', 'asc'));
-    const snapshot = await getDocs(ordersQuery);
-    return snapshot.docs.map((d: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() } as PartyOrder));
-  } catch (error) {
-    return handleServiceError(error, 'getPartyOrders');
-  }
-};
+export const getPartyOrders = () => partyOrdersRepo.getAll();
 
-export const deletePartyOrder = async (orderId: string): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await deleteDoc(doc(db, 'partyOrders', orderId));
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'deletePartyOrder');
-  }
-};
+export const deletePartyOrder = (orderId: string) => partyOrdersRepo.delete(orderId);
 
-export const updatePartyOrder = async (
-  orderId: string,
-  patch: Partial<PartyOrder>
-): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await updateDoc(doc(db, 'partyOrders', orderId), patch);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'updatePartyOrder');
-  }
-};
+export const updatePartyOrder = (orderId: string, patch: Partial<PartyOrder>) =>
+  partyOrdersRepo.update(orderId, patch);
 
 export const addPartyDelivery = async (delivery: PartyDelivery): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    await addDoc(collection(db, 'partyDeliveries'), delivery);
-    return true;
-  } catch (error) {
-    return handleServiceError(error, 'addPartyDelivery');
-  }
+  const result = await partyDeliveriesRepo.add(delivery);
+  return typeof result === 'string' ? true : result;
 };
 
-export const getPartyDeliveries = async (): Promise<PartyDelivery[] | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const deliveriesQuery = query(collection(db, 'partyDeliveries'), orderBy('timeStamp', 'desc'));
-    const snapshot = await getDocs(deliveriesQuery);
-    return snapshot.docs.map((d: FirebaseFirestoreTypes.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() } as PartyDelivery));
-  } catch (error) {
-    return handleServiceError(error, 'getPartyDeliveries');
-  }
-};
+export const getPartyDeliveries = () => partyDeliveriesRepo.getAll();
 
 export const completePartyDeliveryTransaction = async (
   params: CompletePartyDeliveryParams
@@ -116,10 +67,7 @@ export const completePartyDeliveryTransaction = async (
 
     const db = getFirestore();
 
-    const deliveredDate = getISTDate();
-    const deliveredAt = formatDeliveredAt(deliveredDate);
-
-    const dateKey = formatDateKey(deliveredDate);
+    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
 
     const partyOrderRef = doc(db, 'partyOrders', order.id);
     const stockRef = doc(db, 'stocks', order.productId);

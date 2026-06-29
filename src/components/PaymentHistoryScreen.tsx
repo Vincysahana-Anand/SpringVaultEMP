@@ -13,7 +13,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { DailyRecordEntry, getDailyRecordsByDate } from '../services/dailyRecordService';
-import { getISTDate } from '../utils/dateUtils';
+import { getISTDate, formatDateKey, parseDeliveredAt, formatDisplayDate } from '../utils/dateUtils';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError } from '../shared/feedback/messageBus';
 import { getCustomers, Customer } from '../services/customerService';
@@ -24,35 +24,6 @@ interface Props {
 }
 
 const PAYMENT_PRODUCT_KEY = 'payment';
-
-// Parse deliveredAt string like "14/01/26, 02:30 PM" into timestamp
-const parseDeliveredAt = (deliveredAt: string): number => {
-  if (!deliveredAt) return 0;
-  const [datePart, timePartRaw] = deliveredAt.split(',');
-  if (!datePart || !timePartRaw) return 0;
-  const [dd, mm, yy] = datePart.trim().split('/');
-  const [timePart, meridiemRaw] = timePartRaw.trim().split(' ');
-  const [hourStr, minuteStr] = timePart.split(':');
-  const yearFull = Number(yy) + 2000;
-  let hours = Number(hourStr) % 12;
-  if ((meridiemRaw || '').toLowerCase() === 'pm') {
-    hours += 12;
-  }
-  const minutes = Number(minuteStr);
-  const date = new Date(Date.UTC(yearFull, Number(mm) - 1, Number(dd), hours, minutes));
-  return date.getTime();
-};
-
-const formatDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const formatDisplayDate = (date: Date) => {
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-};
 
 export default function PaymentHistoryScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
