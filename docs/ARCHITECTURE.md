@@ -1,6 +1,6 @@
 # SpringVaultEMP Architecture (Current)
 
-Last updated: 2026-06-29
+Last updated: 2026-07-02
 
 ## 1) Overview
 
@@ -34,9 +34,10 @@ Entry point:
 - `App.tsx`
 
 Authentication and routing behavior:
-1. App boot triggers Firestore migration helpers:
-   - `migrateLegacyPurchaseHistories()`
-   - `migrateLegacyDailyRecords()`
+1. App boot performs a non-destructive Firestore legacy-shape scan:
+  - logs a warning if `purchaseHistory` legacy arrays still exist
+  - logs a warning if `dailyRecord` legacy date-array fields still exist
+  - no startup migration writes are executed
 2. `onAuthStateChanged()` listens to Firebase Auth session changes.
 3. On sign-in, profile resolution attempts in order:
    - `users/{uid}`
@@ -307,12 +308,14 @@ If index definitions are missing, daily-record queries fall back to client-side 
 Guardrail:
 - maintain and deploy required Firestore composite indexes for date + createdAt patterns.
 
-### Active risk: migration side effects during backup/restore
+### Active risk: migration execution mistakes in production operations
 
-Automatic migration on startup is convenient but can have unintended consequences if legacy data is reintroduced repeatedly.
+Manual migration reduces app-runtime risk, but running execute mode without dry-run/verify can still create operational mistakes.
 
 Guardrail:
-- run backup restore and migration with clear operational sequencing and verification.
+- run `dry-run` first, then `execute`, then `verify` as a fixed sequence.
+- keep timestamped backups before execute mode.
+- treat migration scripts as admin-only operations.
 
 ### Active risk: undefined/null field hygiene in writes
 
@@ -328,7 +331,7 @@ What is true today:
 - Typed service layer around Firestore
 - Transaction-first design for critical financial and inventory workflows
 - Event-style history storage via subcollections (`purchases`, `entries`)
-- Shared business logic modules for pricing and aggregate merge behavior
+- Shared business logic modules for pricing and sales increment updates
 
 This is the baseline architecture to use for future refactors and feature additions.
 

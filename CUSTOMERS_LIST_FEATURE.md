@@ -1,7 +1,7 @@
 # Customers List Feature
 
 ## Overview
-A dedicated Customers List screen that displays all customers with search functionality. This screen is accessible only to Owners and Employees.
+A Customers List screen that supports search, customer details/edit/history flows, and direct order placement. This screen is available to Owner and Employee roles.
 
 ## Features
 
@@ -10,7 +10,7 @@ A dedicated Customers List screen that displays all customers with search functi
   - Customer name
   - Phone number
   - Full address (door number, floor, street, area)
-  - Balance (advance amount)
+  - Balance
   - Extra can holdings
 
 ### 2. **Search Functionality**
@@ -22,7 +22,13 @@ Search customers by:
 
 Search is real-time and case-insensitive.
 
-### 3. **Navigation**
+### 3. **Order Placement**
+- Add-order action is available directly from each customer card.
+- Prevents duplicate pending orders for same customer + product.
+- Uses atomic transaction path (`placeOrderTransaction`) to create order and increment sales order counter.
+- Product selection is filtered by customer type (Residence/Shop/Party).
+
+### 4. **Navigation**
 Access the Customers List screen from:
 - **Owner Dashboard**: 
   - Drawer menu → "Manage Customers"
@@ -30,12 +36,13 @@ Access the Customers List screen from:
 - **Employee Dashboard**: 
   - Drawer menu → "View Customers"
 
-### 4. **UI Components**
+### 5. **UI Components**
 - Clean, card-based layout matching the app's design system
 - Search bar with search icon and clear button
 - Empty states for no customers or no search results
 - Loading indicator while fetching data
-- Back button to return to dashboard
+- Pull-to-refresh
+- Modal/page-based order form based on role context
 
 ## File Structure
 
@@ -50,27 +57,28 @@ Access the Customers List screen from:
 
 ### CustomersListScreen
 **Props:**
-- `onBack: () => void` - Callback to navigate back to dashboard
+- `allowCustomerDelete?: boolean`
+- `userRole?: 'owner' | 'employee'`
+- `isAdmin?: boolean`
 
-**State:**
-- `customers` - Full list of customers from database
-- `filteredCustomers` - Filtered list based on search query
-- `searchQuery` - Current search input
-- `loading` - Loading state indicator
+**State management:**
+- Uses `useListScreen<Customer>(getCustomers, customerFilter)` for list loading, searching, and refresh.
+- Local state handles selected customer, purchase history screen, order modal/page, products, and submit state.
 
 **Key Functions:**
-- `loadCustomers()` - Fetches all customers from Firestore
-- `filterCustomers()` - Filters customers based on search query
+- `loadCustomers()` - Reload callback from `useListScreen`
+- `refreshCustomers()` - Pull-to-refresh callback from `useListScreen`
 - `getFullAddress()` - Combines address components into display string
-- `renderCustomerCard()` - Renders individual customer card
+- `getFilteredProducts()` - Filters products by customer type
+- `handleSubmitOrder()` - Places order via atomic transaction flow
 
 ## Data Flow
 
 1. Component mounts → `loadCustomers()` fetches data from Firestore
 2. User types in search → `searchQuery` state updates
-3. `useEffect` triggers `filterCustomers()` on query change
-4. Filtered list updates → UI re-renders with results
-5. User clicks back → `onBack()` navigates to dashboard
+3. `useListScreen` applies the filter and updates `filteredCustomers`
+4. User can open details/edit/history or place an order from customer card
+5. Successful order path writes order + sales counter in one transaction
 
 ## Search Algorithm
 
@@ -92,10 +100,8 @@ Uses the centralized theme system:
 ## Future Enhancements
 
 Potential improvements:
-1. Click on customer card to view/edit customer details
-2. Add filter options (customer type, billing type)
-3. Sort options (name, balance, recent activity)
-4. Pull-to-refresh functionality
-5. Infinite scroll for large customer lists
-6. Export customer list to CSV
-7. Quick actions on customer cards (call, message)
+1. Add explicit sort toggles (name, balance, recent activity)
+2. Add server-side pagination for very large customer collections
+3. Add quick contact actions (call/message) on cards
+4. Add bulk customer export (CSV/PDF)
+5. Add pending-order badges per customer
