@@ -379,7 +379,8 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
     }
 
     // Calculate can holding delta (20L cans in customer possession)
-    const emptyBottles = Math.max(0, parseInt(emptyBottlesCollected?.trim() || '0', 10) || 0);
+    const emptyBottlesRaw = Math.max(0, parseInt(emptyBottlesCollected?.trim() || '0', 10) || 0);
+    const emptyBottles = Math.min(emptyBottlesRaw, fullBottles);
     const amountPaidValue = Math.max(0, parseInt(amountPaid?.trim() || '0', 10) || 0);
     
     // Fetch customer data to get canHolding, extraCanHolding, price, and balance

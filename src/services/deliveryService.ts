@@ -3,17 +3,16 @@ import {
   runTransaction,
   collection,
   doc,
-  deleteField,
 } from '@react-native-firebase/firestore';
 
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import { Order } from './orderService';
-import { getTransactionTimestamp } from '../utils/dateUtils';
+import { formatDeliveredAt, getISTDate, getTransactionTimestamp } from '../utils/dateUtils';
 import { DailyRecordEntry, PurchaseRecord } from '../types';
 import { getUnitPriceForCustomer } from '../shared/business/pricing';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
 import { createDailyRecordEntryTransaction } from './dailyRecordService';
-import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { buildSalesIncrementUpdate } from './salesIncrementHelper';
 
 export type CompleteDeliveryParams = {
   order: Order;
@@ -36,6 +35,11 @@ export async function completeDeliveryTransaction(
 > {
   try {
     const { order, fullBottlesDelivered, emptyBottlesCollected, amountPaid, paymentMethod, paymentRef } = params;
+    const deliveredQty = Math.max(0, Math.floor(Number(fullBottlesDelivered) || 0));
+
+    if (deliveredQty <= 0) {
+      return { code: 'invalid-argument', message: '[completeDeliveryTransaction] Invalid fullBottlesDelivered' };
+    }
 
     if (!order?.id) {
       return { code: 'invalid-argument', message: '[completeDeliveryTransaction] Missing order.id' };
@@ -43,7 +47,7 @@ export async function completeDeliveryTransaction(
 
     const db = getFirestore();
 
-    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
+    const { deliveredAt, dateKey } = getTransactionTimestamp();
 
     const orderRef = doc(db, 'orders', order.id);
     const customerRef = doc(db, 'customers', order.customerId);
@@ -53,12 +57,11 @@ export async function completeDeliveryTransaction(
     const isDeliveredCan = order.productId === '20L_CAN' || order.productId === '20L_PARTY_CAN';
 
     const result = await runTransaction(db, async (tx) => {
-const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
-      tx.get(orderRef),
-      tx.get(customerRef),
-      tx.get(stockRef),
-      tx.get(salesRef),
-    ]);
+      const [orderSnap, customerSnap, stockSnap] = await Promise.all([
+        tx.get(orderRef),
+        tx.get(customerRef),
+        tx.get(stockRef),
+      ]);
 
       if (!orderSnap.exists()) {
         throw new Error('Order not found');
@@ -75,32 +78,33 @@ const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
       const stockData = stockSnap.data() as Record<string, unknown>;
 
       const originalOrderQuantity = Number(orderData?.quantity ?? order.quantity ?? 0) || 0;
-      const remainingQuantity = Math.max(originalOrderQuantity - fullBottlesDelivered, 0);
+      const remainingQuantity = Math.max(originalOrderQuantity - deliveredQty, 0);
 
       const customerBalance = Number(customerData?.balance ?? 0) || 0;
       const unitPrice = getUnitPriceForCustomer(customerData, stockData, order.productId);
 
-      const billAmount = customerBalance + unitPrice * fullBottlesDelivered;
+      const billAmount = customerBalance + unitPrice * deliveredQty;
       const newCustomerBalance = billAmount - amountPaid;
 
       const canHolding = Number(customerData?.canHolding ?? 0) || 0;
       const currentExtraCanHolding = Number(customerData?.extraCanHolding ?? 0) || 0;
       const currentTotalCans = canHolding + currentExtraCanHolding;
-      const effectiveEmptyCollected = isDeliveredCan ? emptyBottlesCollected : 0;
-      const newTotalCans = currentTotalCans + (isDeliveredCan ? fullBottlesDelivered - effectiveEmptyCollected : 0);
+      const emptyCollectedRaw = Math.max(0, Math.floor(Number(emptyBottlesCollected) || 0));
+      const effectiveEmptyCollected = isDeliveredCan ? Math.min(emptyCollectedRaw, deliveredQty) : 0;
+      const newTotalCans = currentTotalCans + (isDeliveredCan ? deliveredQty - effectiveEmptyCollected : 0);
       const newExtraCanHolding = newTotalCans - canHolding;
 
       const currentQuantity = Number(stockData?.quantity ?? 0) || 0;
       const currentEmpty = Number(stockData?.empty ?? 0) || 0;
       const currentExtraCan = Number(stockData?.extraCan ?? 0) || 0;
 
-      if (fullBottlesDelivered > currentQuantity) {
+      if (deliveredQty > currentQuantity) {
         throw new Error(`Insufficient stock. Available: ${currentQuantity}`);
       }
 
-      const newQuantity = currentQuantity - fullBottlesDelivered;
+      const newQuantity = currentQuantity - deliveredQty;
       const newEmpty = currentEmpty + effectiveEmptyCollected;
-      const newStockExtraCan = currentExtraCan + (isDeliveredCan ? fullBottlesDelivered - effectiveEmptyCollected : 0);
+      const newStockExtraCan = currentExtraCan + (isDeliveredCan ? deliveredQty - effectiveEmptyCollected : 0);
 
       const customerUpdate: Record<string, number> = {
         balance: newCustomerBalance,
@@ -121,7 +125,7 @@ const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
 
       const purchaseRecord: PurchaseRecord = {
         product: order.productName,
-        deliveredQty: fullBottlesDelivered,
+        deliveredQty: deliveredQty,
         emptyQty: effectiveEmptyCollected,
         orderedAt: order.orderedAt || String(orderData?.orderedAt ?? ''),
         deliveredAt,
@@ -133,28 +137,26 @@ const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
 
       createPurchaseHistoryEntryTransaction(tx, db, order.customerId, purchaseRecord);
 
-      const saleAmount = unitPrice * fullBottlesDelivered;
+      const saleAmount = unitPrice * deliveredQty;
       const pendingPaymentReceived = saleAmount < amountPaid ? amountPaid - saleAmount : 0;
       const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaid - pendingPaymentReceived) : 0;
       const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaid - pendingPaymentReceived) : 0;
+      const cashBillsPayment = paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0;
+      const onlineBillsPayment = paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0;
 
-      const salesPayload = mergeSalesRecord(
-        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
-        {
-          saleAmount,
-          cashPaidValue,
-          onlinePaidValue,
-          ordersCount: 1,
-          deliveredCount: 1,
-          deliveredQty: fullBottlesDelivered,
-          emptyQty: effectiveEmptyCollected,
-          pendingPaymentReceived,
-          cashBillsPayment: paymentMethod === 'cash' ? Number(pendingPaymentReceived) : 0,
-          onlineBillsPayment: paymentMethod === 'online' ? Number(pendingPaymentReceived) : 0,
-          isDeliveredCan,
-        },
-      );
-      tx.set(salesRef, salesPayload, { merge: true });
+      const salesUpdate = buildSalesIncrementUpdate({
+        totalSale: saleAmount,
+        cashPayment: cashPaidValue,
+        onlinePayment: onlinePaidValue,
+        orders: 1,
+        delivered: 1,
+        emptyCollected: effectiveEmptyCollected,
+        pendingPaymentReceived,
+        cashBillsPayment,
+        onlineBillsPayment,
+        deliveredCans: isDeliveredCan ? deliveredQty : 0,
+      });
+      tx.set(salesRef, salesUpdate, { merge: true });
 
       const dailyRecordEntry: DailyRecordEntry = {
         customerId: order.customerId,
@@ -165,7 +167,7 @@ const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
         orderedAt: order.orderedAt || String(orderData?.orderedAt ?? ''),
         deliveredAt,
         orderedQty: originalOrderQuantity,
-        deliveredQty: fullBottlesDelivered,
+        deliveredQty: deliveredQty,
         emptyQty: effectiveEmptyCollected,
         billAmount,
         saleAmount,
@@ -177,7 +179,7 @@ const [orderSnap, customerSnap, stockSnap, salesSnap] = await Promise.all([
 
       createDailyRecordEntryTransaction(tx, db, order.productId, dailyRecordEntry, dateKey);
 
-      if (remainingQuantity > 0 && fullBottlesDelivered < originalOrderQuantity) {
+      if (remainingQuantity > 0 && deliveredQty < originalOrderQuantity) {
         const newOrderTimestamp = getISTDate();
         const formattedNewOrderedAt = formatDeliveredAt(newOrderTimestamp);
         const newOrderRef = doc(collection(db, 'orders'));

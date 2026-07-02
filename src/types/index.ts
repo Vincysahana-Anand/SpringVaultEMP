@@ -134,37 +134,3 @@ export interface DailyRecordEntry {
 export interface DailyRecord {
   [date: string]: DailyRecordEntry[] | string;
 }
-
-export interface PartyOrder {
-  id?: string;
-  customerId: string;
-  customerName: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  paymentMethod: string;
-  orderedAt?: string;
-  requestedDate?: string;
-  deliveredAt?: string;
-  deliveredQty?: number;
-  address?: string;
-  mobile?: string;
-  timeStamp?: Date;
-}
-
-export interface PartyDelivery {
-  id?: string;
-  customerId: string;
-  customerName: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  deliveredQty?: number;
-  deliveredAt?: string;
-  requestedDate?: string;
-  address?: string;
-  mobile?: string;
-  timeStamp?: Date;
-  paymentMethod?: string;
-  amountPaid?: number;
-}

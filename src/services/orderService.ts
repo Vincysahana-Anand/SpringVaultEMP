@@ -8,8 +8,8 @@ import {
 } from '@react-native-firebase/firestore';
 import { Order } from '../types';
 import { getISTDate, formatDateKey } from '../utils/dateUtils';
-import { mergeSalesRecord } from '../shared/business/recordMerge';
 import { createRepository } from './firestoreRepository';
+import { buildSalesIncrementUpdate } from './salesIncrementHelper';
 
 export type { Order } from '../types';
 
@@ -35,13 +35,8 @@ export const placeOrderTransaction = async (
     const newOrderRef = doc(collection(db, 'orders'));
 
     await runTransaction(db, async (tx) => {
-      const salesSnap = await tx.get(salesRef);
-      const salesPayload = mergeSalesRecord(
-        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
-        { ordersCount: 1 },
-      );
       tx.set(newOrderRef, order);
-      tx.set(salesRef, salesPayload, { merge: true });
+      tx.set(salesRef, buildSalesIncrementUpdate({ orders: 1 }), { merge: true });
     });
 
     return { ok: true };

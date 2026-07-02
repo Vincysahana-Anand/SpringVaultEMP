@@ -30,7 +30,6 @@ import { handleServiceError } from '../services/serviceErrorWrapper';
 import { showError, showSuccess } from '../shared/feedback/messageBus';
 import { DrawerLayout } from '../shared/layout/DrawerLayout';
 import CustomersListScreen from './CustomersListScreen';
-import PartyOrdersScreen from './PartyOrdersScreen';
 import DeliveriesScreen from './DeliveriesScreen';
 import StockScreen from './StockScreen';
 import ExpenseScreen from './ExpenseScreen';
@@ -136,7 +135,6 @@ export default function OwnerDashboard() {
 
       if (
         currentScreen === 'customers' ||
-        currentScreen === 'partyOrders' ||
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
@@ -458,8 +456,6 @@ export default function OwnerDashboard() {
       >
         {currentScreen === 'customers' ? (
           <CustomersListScreen allowCustomerDelete={true} userRole="owner" isAdmin={true} />
-        ) : currentScreen === 'partyOrders' ? (
-          <PartyOrdersScreen allowCustomerDelete={true} userRole="owner" isAdmin={true} />
         ) : currentScreen === 'profile' ? (
           <UserProfileScreen
             allowEdit={true}

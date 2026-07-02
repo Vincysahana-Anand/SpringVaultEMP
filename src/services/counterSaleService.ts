@@ -9,7 +9,7 @@ import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import { DailyRecordEntry, PurchaseRecord } from '../types';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
 import { createDailyRecordEntryTransaction } from './dailyRecordService';
-import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { buildSalesIncrementUpdate } from './salesIncrementHelper';
 import { config } from '../shared/config';
 
 export const COUNTER_SALES_CUSTOMER_ID = config.firestore.counterSalesCustomerId;
@@ -44,17 +44,16 @@ export async function completeCounterSaleTransaction(
 
     const db = getFirestore();
 
-    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
+    const { deliveredAt, dateKey } = getTransactionTimestamp();
 
     const customerRef = doc(db, 'customers', COUNTER_SALES_CUSTOMER_ID);
     const stockRef = doc(db, 'stocks', productId);
     const salesRef = doc(db, 'sales', dateKey);
 
     const result = await runTransaction(db, async (tx) => {
-      const [customerSnap, stockSnap, salesSnap] = await Promise.all([
+      const [customerSnap, stockSnap] = await Promise.all([
         tx.get(customerRef),
         tx.get(stockRef),
-        tx.get(salesRef),
       ]);
 
       if (!customerSnap.exists()) throw new Error('CounterSales customer not found');
@@ -114,23 +113,17 @@ export async function completeCounterSaleTransaction(
       const pendingPaymentReceived = saleAmount < amountPaid ? amountPaid - saleAmount : 0;
       const cashPaidValue = paymentMethod === 'cash' ? Number(amountPaid - pendingPaymentReceived) : 0;
       const onlinePaidValue = paymentMethod === 'online' ? Number(amountPaid - pendingPaymentReceived) : 0;
-      const deliveredCans = is20L ? quantity : 0;
-
-      const salesPayload = mergeSalesRecord(
-        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
-        {
-          saleAmount,
-          cashPaidValue,
-          onlinePaidValue,
-          ordersCount: 1,
-          deliveredCount: 1,
-          deliveredQty: quantity,
-          emptyQty: emptyCollected,
-          pendingPaymentReceived,
-          isDeliveredCan: is20L,
-        },
-      );
-      tx.set(salesRef, salesPayload, { merge: true });
+      const salesUpdate = buildSalesIncrementUpdate({
+        totalSale: saleAmount,
+        cashPayment: cashPaidValue,
+        onlinePayment: onlinePaidValue,
+        orders: 1,
+        delivered: 1,
+        emptyCollected,
+        pendingPaymentReceived,
+        deliveredCans: is20L ? quantity : 0,
+      });
+      tx.set(salesRef, salesUpdate, { merge: true });
 
       const dailyRecordEntry: DailyRecordEntry = {
         customerId: COUNTER_SALES_CUSTOMER_ID,

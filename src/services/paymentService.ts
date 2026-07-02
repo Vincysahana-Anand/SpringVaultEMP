@@ -9,7 +9,7 @@ import { getTransactionTimestamp } from '../utils/dateUtils';
 import { DailyRecordEntry, PurchaseRecord } from '../types';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
 import { createDailyRecordEntryTransaction } from './dailyRecordService';
-import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { buildSalesIncrementUpdate } from './salesIncrementHelper';
 
 export type CompletePaymentParams = {
   customerId: string;
@@ -43,49 +43,46 @@ export async function completePaymentTransaction(
     }
 
     const db = getFirestore();
-    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
+    const { deliveredAt, dateKey } = getTransactionTimestamp();
     const newBalance = startingBalance - amount;
 
     const customerRef = doc(db, 'customers', customerId);
     const salesRef = doc(db, 'sales', dateKey);
 
     await runTransaction(db, async (tx) => {
-      const [customerSnap, salesSnap] = await Promise.all([
-      tx.get(customerRef),
-      tx.get(salesRef),
-    ]);
+      const customerSnap = await tx.get(customerRef);
 
-    if (!customerSnap.exists()) {
-      throw new Error('Customer not found');
-    }
+      if (!customerSnap.exists()) {
+        throw new Error('Customer not found');
+      }
 
-    tx.update(customerRef, { balance: newBalance });
+      tx.update(customerRef, { balance: newBalance });
 
-    const purchaseRecord: PurchaseRecord = {
-      product: 'payment',
-      deliveredQty: 0,
-      emptyQty: 0,
-      orderedAt: deliveredAt,
-      deliveredAt,
-      billAmount: startingBalance,
-      amountPaid: amount,
-      paymentMethod,
-      paymentRef: paymentMethod === 'online' ? parseInt(paymentRef || '0', 10) || 0 : 0,
-    };
+      const purchaseRecord: PurchaseRecord = {
+        product: 'payment',
+        deliveredQty: 0,
+        emptyQty: 0,
+        orderedAt: deliveredAt,
+        deliveredAt,
+        billAmount: startingBalance,
+        amountPaid: amount,
+        paymentMethod,
+        paymentRef: paymentMethod === 'online' ? parseInt(paymentRef || '0', 10) || 0 : 0,
+      };
 
-    createPurchaseHistoryEntryTransaction(tx, db, customerId, purchaseRecord);
+      createPurchaseHistoryEntryTransaction(tx, db, customerId, purchaseRecord);
 
       const cashBillsPayment = paymentMethod === 'cash' ? amount : 0;
       const onlineBillsPayment = paymentMethod === 'online' ? amount : 0;
-      const salesPayload = mergeSalesRecord(
-        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
-        {
+      tx.set(
+        salesRef,
+        buildSalesIncrementUpdate({
           pendingPaymentReceived: amount,
           cashBillsPayment,
           onlineBillsPayment,
-        },
+        }),
+        { merge: true },
       );
-      tx.set(salesRef, salesPayload, { merge: true });
 
       const dailyRecordEntry: DailyRecordEntry = {
         customerId,

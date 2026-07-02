@@ -49,7 +49,6 @@ import CustomerPurchaseHistoryScreen from './CustomerPurchaseHistoryScreen';
 import { COUNTER_SALES_CUSTOMER_ID, COUNTER_SALES_CUSTOMER_NAME } from '../services/counterSaleService';
 import ReportsScreen from './ReportsScreen';
 import UserProfileScreen from './UserProfileScreen';
-import PartyOrdersScreen from './PartyOrdersScreen';
 
 const logo = require('../assets/banner.png');
 
@@ -132,7 +131,6 @@ export default function EmployeeDashboard() {
 
       if (
         currentScreen === 'customers' ||
-        currentScreen === 'partyOrders' ||
         currentScreen === 'deliveries' ||
         currentScreen === 'stock' ||
         currentScreen === 'addCustomer' ||
@@ -458,8 +456,6 @@ export default function EmployeeDashboard() {
       >
           {currentScreen === 'customers' ? (
             <CustomersListScreen allowCustomerDelete={false} userRole="employee" isAdmin={isAdmin} />
-          ) : currentScreen === 'partyOrders' ? (
-            <PartyOrdersScreen allowCustomerDelete={false} userRole="employee" isAdmin={isAdmin} />
           ) : currentScreen === 'profile' ? (
             <UserProfileScreen
               allowEdit={isAdmin}

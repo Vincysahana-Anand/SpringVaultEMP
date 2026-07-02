@@ -9,7 +9,7 @@ import { getTransactionTimestamp } from '../utils/dateUtils';
 import { DailyRecordEntry, PurchaseRecord } from '../types';
 import { createPurchaseHistoryEntryTransaction } from './purchaseHistoryService';
 import { createDailyRecordEntryTransaction } from './dailyRecordService';
-import { mergeSalesRecord } from '../shared/business/recordMerge';
+import { buildSalesIncrementUpdate } from './salesIncrementHelper';
 
 export type CompleteEmptyCanReturnParams = {
   customerId: string;
@@ -46,17 +46,16 @@ export async function completeEmptyCanReturnTransaction(
     }
 
     const db = getFirestore();
-    const { deliveredDate, deliveredAt, dateKey } = getTransactionTimestamp();
+    const { deliveredAt, dateKey } = getTransactionTimestamp();
 
     const customerRef = doc(db, 'customers', customerId);
     const stockRef = doc(db, 'stocks', productId);
     const salesRef = doc(db, 'sales', dateKey);
 
     await runTransaction(db, async (tx) => {
-      const [customerSnap, stockSnap, salesSnap] = await Promise.all([
+      const [customerSnap, stockSnap] = await Promise.all([
         tx.get(customerRef),
         tx.get(stockRef),
-        tx.get(salesRef),
       ]);
 
       if (!customerSnap.exists()) {
@@ -94,11 +93,11 @@ export async function completeEmptyCanReturnTransaction(
 
       createPurchaseHistoryEntryTransaction(tx, db, customerId, purchaseRecord);
 
-      const salesPayload = mergeSalesRecord(
-        salesSnap.exists() ? (salesSnap.data() as Parameters<typeof mergeSalesRecord>[0]) : undefined,
-        { emptyReturned: qty },
+      tx.set(
+        salesRef,
+        buildSalesIncrementUpdate({ emptyReturned: qty }),
+        { merge: true },
       );
-      tx.set(salesRef, salesPayload, { merge: true });
 
       const dailyRecordEntry: DailyRecordEntry = {
         customerId,
