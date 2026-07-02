@@ -99,10 +99,15 @@ npm run ios
 - npm run ios: build and run iOS app
 - npm test: run tests
 - npm run lint: run lint checks
+- npm run backup:firestore: export Firestore backup JSON
+- npm run migrate:firestore:dry-run: scan and preview history migration without writes
+- npm run migrate:firestore:execute: apply history migration to production schema
+- npm run migrate:firestore:verify: verify no legacy history arrays remain
 
 ## Notes
 
-- App startup runs Firestore legacy migration helpers for purchase history and daily records.
+- App startup does not mutate Firestore schema; it only warns if legacy history arrays are detected.
+- Use explicit migration commands for production schema migration (`dry-run` -> `execute` -> `verify`).
 - Product-level can-return fields apply only to 20L product flows.
 - Daily record queries may require Firestore composite indexes for best performance.
 

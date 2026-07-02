@@ -13,7 +13,7 @@ import { buildSalesIncrementUpdate } from './salesIncrementHelper';
 
 export type { Order } from '../types';
 
-const ordersRepo = createRepository<Order>('orders', [orderBy('timeStamp', 'asc')]);
+const ordersRepo = createRepository<Order>('orders', [orderBy('timeStamp', 'asc')] as any);
 
 export const getOrders = () => ordersRepo.getAll();
 

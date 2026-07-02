@@ -15,62 +15,8 @@ import {
 } from '@react-native-firebase/firestore';
 import { getISTDate, formatDateKey } from '../utils/dateUtils';
 import { SalesRecord } from '../types';
-import { mergeSalesRecord } from '../shared/business/recordMerge';
 
 export type { SalesRecord } from '../types';
-
-/**
- * Update or create sales record for today
- * Increments existing values with new delivery data
- */
-export const updateSalesRecord = async (
-  deliveredQty: number,
-  emptyQty: number,
-  cashPaidValue: number,
-  onlinePaidValue: number,
-  _billAmount: number,
-  isDeliveredCan: boolean,
-  saleAmount: number,
-  pendingPaymentReceived?: number,
-  ordersCount?: number,
-  deliveredCount?: number,
-  cashBillsPayment?: number,
-  onlineBillsPayment?: number,
-  emptyReturned?: number,
-): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const dateString = formatDateKey(getISTDate());
-    const salesDocRef = doc(collection(db, 'sales'), dateString);
-
-    await runTransaction(db, async (tx) => {
-      const salesSnapshot = await tx.get(salesDocRef);
-      const salesPayload = mergeSalesRecord(
-        salesSnapshot.exists() ? (salesSnapshot.data() as SalesRecord) : undefined,
-        {
-          saleAmount,
-          cashPaidValue,
-          onlinePaidValue,
-          ordersCount,
-          deliveredCount,
-          deliveredQty,
-          emptyQty,
-          pendingPaymentReceived,
-          cashBillsPayment,
-          onlineBillsPayment,
-          emptyReturned,
-          isDeliveredCan,
-        },
-      );
-      tx.set(salesDocRef, salesPayload, { merge: true });
-    });
-
-    return true;
-  } catch (error) {
-    console.error('Error in updateSalesRecord:', error);
-    return handleServiceError(error, 'updateSalesRecord');
-  }
-};
 
 export const getSalesRecord = async (dateString?: string): Promise<SalesRecord | null | ServiceError> => {
   try {

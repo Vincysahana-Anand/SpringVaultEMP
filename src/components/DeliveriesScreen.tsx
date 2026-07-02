@@ -503,14 +503,6 @@ export default function DeliveriesScreen({ userRole = 'employee', isAdmin = fals
       newStockExtraCan: newStockExtraCan,
     });
 
-    // LEGACY (non-atomic) implementation kept for reference.
-    // It performed a sequence of independent writes across multiple documents.
-    // This is intentionally replaced by an all-or-nothing Firestore transaction.
-    //
-    // try {
-    //   ... updateCustomer -> updateStock -> addPurchaseHistory -> addOrder (partial) -> updateSalesRecord -> addDailyRecord -> deleteOrder
-    // } catch (error) { ... }
-
     try {
       const txResult = await completeDeliveryTransaction({
         order: selectedOrder,

@@ -86,7 +86,8 @@ const styles = StyleSheet.create({
     marginTop: spacing[8],
   },
   emptyText: {
-    ...typography.body,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.normal,
     color: colors.gray[400],
     textAlign: 'center',
   },

@@ -94,7 +94,7 @@ Generic repository:
 
 Business utility modules:
 - Pricing logic: `src/shared/business/pricing.ts`
-- Sales aggregation merge logic: `src/shared/business/recordMerge.ts`
+- Sales increment payload builder: `src/services/salesIncrementHelper.ts`
 - Date/time utilities and IST formatting: `src/utils/dateUtils.ts`
 
 ## 7) Firestore Data Model
@@ -220,7 +220,8 @@ Atomic writes include:
 ## 9) Legacy Schema Migration
 
 Migration utility:
-- `src/services/firestoreHistoryMigration.ts`
+- Runtime scanner: `src/services/firestoreHistoryMigration.ts`
+- Admin migration CLI: `scripts/firestore-production-migration.js`
 
 ### 9.1 Purchase history migration
 
@@ -248,8 +249,12 @@ Behavior:
 - removes legacy date fields and deletes legacy product doc
 
 Operational note:
-- Migrations run on app startup in `App.tsx`.
-- Treat backup restore + migration reruns carefully to avoid accidental data churn.
+- App startup only runs a non-destructive legacy-shape scan and logs warnings.
+- Production migration is executed out-of-band with explicit commands:
+  - `npm run migrate:firestore:dry-run`
+  - `npm run migrate:firestore:execute`
+  - `npm run migrate:firestore:verify`
+- The migration script is idempotent, uses batched writes, and records schema marker `meta/firestoreMigrations`.
 
 ## 10) Query and Index Strategy
 
@@ -282,12 +287,12 @@ Pricing source order:
 Centralized in:
 - `src/shared/business/pricing.ts`
 
-### Sales record merge
+### Sales record increments
 
-All additive daily counters are merged through:
-- `src/shared/business/recordMerge.ts`
+All additive daily counters use a shared increment payload builder:
+- `src/services/salesIncrementHelper.ts`
 
-This keeps aggregation behavior consistent across different transaction services.
+This keeps aggregation behavior consistent across different transaction services while avoiding read-modify-write contention.
 
 ## 12) Known Risks and Guardrails
 

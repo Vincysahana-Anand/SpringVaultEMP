@@ -15,6 +15,7 @@ import ViewShot, { captureRef } from 'react-native-view-shot';
 import Share from 'react-native-share';
 import { WebView } from 'react-native-webview';
 import { BANNER_PNG_DATA_URI } from '../assets/bannerDataUri';
+import { getISTDate } from '../utils/dateUtils';
 
 interface Props {
   onBack?: () => void;

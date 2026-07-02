@@ -7,7 +7,11 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "backup:firestore": "node scripts/export-firestore-backup.js",
+    "migrate:firestore:dry-run": "node scripts/firestore-production-migration.js --mode=dry-run",
+    "migrate:firestore:execute": "node scripts/firestore-production-migration.js --mode=execute",
+    "migrate:firestore:verify": "node scripts/firestore-production-migration.js --mode=verify"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.24.0",

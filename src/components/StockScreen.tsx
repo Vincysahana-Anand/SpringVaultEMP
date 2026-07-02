@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: typography.fontSize['2xl'],
     fontWeight: typography.fontWeight.bold,
-    color: colors.bg.dark,
+    color: colors.gray[800],
     marginBottom: spacing[2],
   },
   headerSubtitle: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.bg.dark,
+    color: colors.gray[800],
   },
   editButton: {
     padding: spacing[2],

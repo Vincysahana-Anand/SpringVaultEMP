@@ -5,7 +5,7 @@ const firestore = require('firebase-admin/firestore');
 
 async function main() {
   const serviceAccountPath = process.argv[2] || path.resolve(__dirname, '..', 'firebase-service-account.json');
-  const outputPath = process.argv[3] || path.resolve(__dirname, '..', 'backup.json');
+  const outputPath = process.argv[3] || path.resolve(__dirname, '..', `backup-${buildTimestamp()}.json`);
 
   if (!fs.existsSync(serviceAccountPath)) {
     console.error(`Service account file not found: ${serviceAccountPath}`);
@@ -37,6 +37,18 @@ async function main() {
   fs.writeFileSync(outputPath, JSON.stringify(backup, null, 2));
   console.log(`Backup written to ${outputPath}`);
   console.log(`Collections exported: ${Object.keys(backup.collections).length}`);
+}
+
+function buildTimestamp() {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}`;
 }
 
 async function exportCollection(collectionRef) {

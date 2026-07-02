@@ -1,34 +1,13 @@
 import {
   collection,
-  deleteDoc,
-  deleteField,
   doc,
   getDoc,
   getDocs,
   getFirestore,
-  setDoc,
-  updateDoc,
 } from '@react-native-firebase/firestore';
 
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-import { CustomerPurchaseHistory, DailyRecordEntry, PurchaseRecord } from '../types';
-
-const purchaseRecordKey = (record: PurchaseRecord): string => {
-  return [
-    record.product,
-    record.orderedAt,
-    record.deliveredAt,
-    String(record.billAmount),
-    String(record.amountPaid),
-    record.paymentMethod,
-    String(record.emptyQty),
-    String(record.deliveredQty),
-  ].join('|');
-};
-
-const createStableDocId = (value: string): string => {
-  return value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100);
-};
+import { DailyRecordEntry } from '../types';
 
 const buildCustomerAddress = (customer: Record<string, unknown> | null | undefined): string => {
   if (!customer) return '';
@@ -43,84 +22,44 @@ const buildCustomerAddress = (customer: Record<string, unknown> | null | undefin
   return parts.join(', ');
 };
 
-export const migrateLegacyPurchaseHistoryForCustomer = async (
-  customerId: string,
+export type LegacyHistoryShapeSummary = {
+  purchaseHistoryDocsWithLegacyPurchasesArray: number;
+  dailyRecordDocsWithLegacyDateArrays: number;
+};
+
+/**
+ * Runtime-safe legacy schema scan. This does not mutate data and is useful
+ * for warning when an environment still requires admin migration.
+ */
+export const scanLegacyHistoryShape = async (
   db = getFirestore(),
-): Promise<boolean> => {
-  try {
-    const legacyRef = doc(db, 'purchaseHistory', customerId);
-    const legacySnap = await getDoc(legacyRef);
-    if (!legacySnap.exists()) {
-      return false;
+): Promise<LegacyHistoryShapeSummary> => {
+  const [purchaseSnapshot, dailySnapshot] = await Promise.all([
+    getDocs(collection(db, 'purchaseHistory')),
+    getDocs(collection(db, 'dailyRecord')),
+  ]);
+
+  let purchaseLegacyCount = 0;
+  purchaseSnapshot.docs.forEach((docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
+    const data = docSnap.data() as Record<string, unknown>;
+    if (Array.isArray(data.purchases)) {
+      purchaseLegacyCount += 1;
     }
+  });
 
-    const legacyData = legacySnap.data() as CustomerPurchaseHistory | undefined;
-    const legacyRecords = Array.isArray(legacyData?.purchases) ? legacyData.purchases : [];
-    if (!legacyRecords.length) {
-      await deleteDoc(legacyRef);
-      return false;
+  let dailyLegacyCount = 0;
+  dailySnapshot.docs.forEach((docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
+    const data = docSnap.data() as Record<string, unknown>;
+    const hasDateArrays = Object.keys(data).some((key) => Array.isArray(data[key]));
+    if (hasDateArrays) {
+      dailyLegacyCount += 1;
     }
+  });
 
-    const purchasesCollection = collection(db, 'purchaseHistory', customerId, 'purchases');
-    for (const record of legacyRecords) {
-      const docId = `legacy-${createStableDocId(purchaseRecordKey(record))}`;
-      await setDoc(doc(purchasesCollection, docId), {
-        ...record,
-        createdAt: new Date(),
-      });
-    }
-
-    await deleteDoc(legacyRef);
-    return true;
-  } catch (error) {
-    console.error('Error migrating legacy purchase history:', error);
-    return false;
-  }
-};
-
-export const migrateLegacyPurchaseHistories = async (db = getFirestore()): Promise<void> => {
-  const snapshot = await getDocs(collection(db, 'purchaseHistory'));
-  await Promise.all(snapshot.docs.map((docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => migrateLegacyPurchaseHistoryForCustomer(docSnap.id, db)));
-};
-
-export const migrateLegacyDailyRecords = async (db = getFirestore()): Promise<void> => {
-  try {
-    const snapshot = await getDocs(collection(db, 'dailyRecord'));
-    await Promise.all(snapshot.docs.map(async (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
-      const productId = docSnap.id;
-      const data = docSnap.data() as Record<string, unknown>;
-      const dateKeys = Object.keys(data).filter((key) => Array.isArray(data[key]));
-
-      if (!dateKeys.length) {
-        return;
-      }
-
-      const entriesCollection = collection(db, 'dailyRecord', productId, 'entries');
-      const updates: Record<string, unknown> = {};
-
-      for (const dateKey of dateKeys) {
-        const entries = data[dateKey] as DailyRecordEntry[] | undefined;
-        if (!Array.isArray(entries)) {
-          continue;
-        }
-        for (const [index, entry] of entries.entries()) {
-          const entryRef = doc(entriesCollection, `legacy-${createStableDocId(`${dateKey}-${index}`)}`);
-          const normalizedEntry = entry as unknown as Record<string, unknown>;
-          await setDoc(entryRef, {
-            ...normalizedEntry,
-            date: dateKey,
-            createdAt: new Date(),
-          });
-        }
-        updates[dateKey] = deleteField();
-      }
-
-      await updateDoc(doc(db, 'dailyRecord', productId), updates);
-      await deleteDoc(doc(db, 'dailyRecord', productId));
-    }));
-  } catch (error) {
-    console.error('Error migrating legacy daily records:', error);
-  }
+  return {
+    purchaseHistoryDocsWithLegacyPurchasesArray: purchaseLegacyCount,
+    dailyRecordDocsWithLegacyDateArrays: dailyLegacyCount,
+  };
 };
 
 export const hydrateDailyRecordEntriesWithCustomerData = async (

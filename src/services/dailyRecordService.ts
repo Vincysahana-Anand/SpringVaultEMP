@@ -8,7 +8,6 @@ import {
   limit,
   orderBy,
   query,
-  setDoc,
   startAfter,
   where,
 } from '@react-native-firebase/firestore';
@@ -29,6 +28,8 @@ export type DailyRecordPage = {
   hasMore: boolean;
 };
 
+type PersistedDailyRecordEntry = DailyRecordEntry & { createdAt?: unknown };
+
 const toMillis = (value: unknown): number => {
   if (!value) return 0;
 
@@ -45,8 +46,8 @@ const toMillis = (value: unknown): number => {
 
 const sortByCreatedAtDesc = (entries: DailyRecordEntry[]): DailyRecordEntry[] => {
   return [...entries].sort((left, right) => {
-    const leftTime = toMillis((left as Record<string, unknown>).createdAt);
-    const rightTime = toMillis((right as Record<string, unknown>).createdAt);
+    const leftTime = toMillis((left as PersistedDailyRecordEntry).createdAt);
+    const rightTime = toMillis((right as PersistedDailyRecordEntry).createdAt);
     return rightTime - leftTime;
   });
 };
@@ -65,7 +66,7 @@ const getDailyRecordFallbackEntriesByDate = async (
   date: string,
 ): Promise<DailyRecordEntry[]> => {
   const productIds = config.firestore.dailyRecordProductIds;
-  const snapshots = await Promise.all(
+  const snapshots: FirebaseFirestoreTypes.QuerySnapshot[] = await Promise.all(
     productIds.map((productId) => getDocs(
       query(
         collection(db, 'dailyRecord', productId, 'entries'),
@@ -77,15 +78,6 @@ const getDailyRecordFallbackEntriesByDate = async (
   return snapshots.flatMap((snapshot) => snapshot.docs.map(
     (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
   ));
-};
-
-const extractDateFromDeliveredAt = (deliveredAt: string): string => {
-  const datePart = deliveredAt.split(',')[0];
-  const [dd, mm, yy] = datePart.trim().split('/');
-  const year = parseInt(yy, 10) < 50 ? 2000 + parseInt(yy, 10) : 1900 + parseInt(yy, 10);
-  const month = String(parseInt(mm, 10)).padStart(2, '0');
-  const day = String(parseInt(dd, 10)).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 };
 
 export const createDailyRecordEntryTransaction = (
@@ -103,30 +95,6 @@ export const createDailyRecordEntryTransaction = (
     date: dateKey,
     createdAt: new Date(),
   });
-};
-
-export const addDailyRecord = async (
-  productId: string,
-  entry: DailyRecordEntry,
-): Promise<true | ServiceError> => {
-  try {
-    const db = getFirestore();
-    const dateKey = extractDateFromDeliveredAt(entry.deliveredAt);
-    const { customerName, customerAddress, customerMobile, ...persistedEntry } = entry;
-    const entriesCollection = collection(db, 'dailyRecord', productId, 'entries');
-    const entryRef = doc(entriesCollection);
-
-    await setDoc(entryRef, {
-      ...persistedEntry,
-      date: dateKey,
-      createdAt: new Date(),
-    });
-
-    return true;
-  } catch (error) {
-    console.error('Error in addDailyRecord:', error);
-    return handleServiceError(error, 'addDailyRecord');
-  }
 };
 
 export const getDailyRecordsByDate = async (
@@ -164,7 +132,7 @@ export const getDailyRecordsByDatePage = async (
   try {
     const db = getFirestore();
     const cappedPageSize = Math.max(1, pageSize);
-    const constraints: FirebaseFirestoreTypes.QueryConstraint[] = [
+    const constraints = [
       where('date', '==', date),
       orderBy('createdAt', 'desc'),
       limit(cappedPageSize),
@@ -175,7 +143,7 @@ export const getDailyRecordsByDatePage = async (
     }
 
     try {
-      const entriesQuery = query(collectionGroup(db, 'entries'), ...constraints);
+      const entriesQuery = query(collectionGroup(db, 'entries'), ...(constraints as any[]));
       const snapshot = await getDocs(entriesQuery);
       const entries = snapshot.docs.map(
         (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
@@ -214,39 +182,6 @@ export const getDailyRecordsByDatePage = async (
   }
 };
 
-export const getDailyRecord = async (
-  productId: string,
-  date: string,
-): Promise<DailyRecordEntry[] | ServiceError> => {
-  try {
-    let cursor: DailyRecordCursor = null;
-    const entries: DailyRecordEntry[] = [];
-
-    while (true) {
-      const page = await getDailyRecordPage(
-        productId,
-        date,
-        DEFAULT_DAILY_RECORD_PAGE_SIZE,
-        cursor,
-      );
-      if (!('entries' in page)) {
-        return page;
-      }
-
-      entries.push(...page.entries);
-      if (!page.hasMore || !page.nextCursor) {
-        break;
-      }
-      cursor = page.nextCursor;
-    }
-
-    return entries;
-  } catch (error) {
-    console.error('Error in getDailyRecord:', error);
-    return handleServiceError(error, 'getDailyRecord');
-  }
-};
-
 export const getDailyRecordPage = async (
   productId: string,
   date: string,
@@ -256,7 +191,7 @@ export const getDailyRecordPage = async (
   try {
     const db = getFirestore();
     const cappedPageSize = Math.max(1, pageSize);
-    const constraints: FirebaseFirestoreTypes.QueryConstraint[] = [
+    const constraints = [
       where('date', '==', date),
       orderBy('createdAt', 'desc'),
       limit(cappedPageSize),
@@ -269,7 +204,7 @@ export const getDailyRecordPage = async (
     try {
       const entriesQuery = query(
         collection(db, 'dailyRecord', productId, 'entries'),
-        ...constraints,
+        ...(constraints as any[]),
       );
 
       const snapshot = await getDocs(entriesQuery);
@@ -314,20 +249,5 @@ export const getDailyRecordPage = async (
   } catch (error) {
     console.error('Error in getDailyRecordPage:', error);
     return handleServiceError(error, 'getDailyRecordPage');
-  }
-};
-
-export const getAllDailyRecords = async (): Promise<
-  DailyRecordEntry[] | ServiceError
-> => {
-  try {
-    const db = getFirestore();
-    const snapshot = await getDocs(collectionGroup(db, 'entries'));
-    const entries = snapshot.docs.map((docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry);
-    const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
-    return hydrated;
-  } catch (error) {
-    console.error('Error in getAllDailyRecords:', error);
-    return handleServiceError(error, 'getAllDailyRecords');
   }
 };

@@ -21,7 +21,7 @@ import InactiveCustomer from './src/components/InactiveCustomer';
 import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc } from '@react-native-firebase/firestore';
 import { handleServiceError } from './src/services/serviceErrorWrapper';
 import { getAuth, onAuthStateChanged, signOut } from '@react-native-firebase/auth';
-import { migrateLegacyDailyRecords, migrateLegacyPurchaseHistories } from './src/services/firestoreHistoryMigration';
+import { scanLegacyHistoryShape } from './src/services/firestoreHistoryMigration';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GlobalMessageProvider } from './src/shared/feedback/GlobalMessageProvider';
 import { User } from './src/types';
@@ -54,16 +54,25 @@ function AppContent() {
   const [showForgot, setShowForgot] = useState(false);
 
   useEffect(() => {
-    const runMigrations = async () => {
+    const warnIfLegacyHistoryShapeExists = async () => {
       try {
-        await migrateLegacyPurchaseHistories();
-        await migrateLegacyDailyRecords();
+        const summary = await scanLegacyHistoryShape();
+        if (
+          summary.purchaseHistoryDocsWithLegacyPurchasesArray > 0
+          || summary.dailyRecordDocsWithLegacyDateArrays > 0
+        ) {
+          console.warn(
+            'Legacy Firestore history schema detected. ' +
+            'Run scripts/firestore-production-migration.js with --mode=execute.',
+            summary,
+          );
+        }
       } catch (error) {
-        console.error('Firestore history migration failed:', error);
+        console.warn('Unable to scan Firestore legacy history schema:', error);
       }
     };
 
-    void runMigrations();
+    void warnIfLegacyHistoryShapeExists();
 
     // Load cached user immediately to avoid brief login flash
     const loadCached = async () => {

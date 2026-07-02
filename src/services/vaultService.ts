@@ -1,6 +1,8 @@
-import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, updateDoc } from '@react-native-firebase/firestore';
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
 import { VaultRecord } from '../types';
+
+export type { VaultRecord } from '../types';
 
 const getVaultDocRef = () => {
   const db = getFirestore();

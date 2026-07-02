@@ -18,8 +18,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers, Customer } from '../services/customerService';
 import { getStocks, Stock } from '../services/stockService';
-import { updateSalesRecord } from '../services/salesService';
-import { addOrder, getOrders, Order } from '../services/orderService';
+import { getOrders, placeOrderTransaction, Order } from '../services/orderService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { currencyINR } from '../utils/format';
 import { getISTDate } from '../utils/dateUtils';
@@ -304,43 +303,18 @@ export default function CustomersListScreen({
         timeStamp: now,
       };
       
-      // Add order to Firebase
-      orderData.customerId = orderData.customerId || '';
-      const result = await addOrder(orderData as any);
-      
-      if (result === true) {
-        // Update sales record
-        const fullBottles = 0, emptyBottles = 0, cashPaidValue = 0, onlinePaidValue = 0, billAmountValue = 0, isDeliveredCan = false, saleAmount = 0, pendingPaymentReceived = 0; // Dummy values for illustration
-        const ordersCount = 1, deliveredCount = 0;
-        const salesUpdateResult = await updateSalesRecord(
-                Number(fullBottles),
-                Number(emptyBottles),
-                Number(cashPaidValue),
-                Number(onlinePaidValue),
-                Number(billAmountValue),
-                isDeliveredCan,
-                Number(saleAmount),
-                Number(pendingPaymentReceived),
-                ordersCount,
-                deliveredCount
-              );
-              if (salesUpdateResult !== true) {
-                console.error('Sales record update failed:', salesUpdateResult);
-                const err = handleServiceError(salesUpdateResult, 'updateSalesRecord');
-                showError(err.message);
-                setSubmittingOrder(false);
-                return;
-              }
-              console.log('Sales record updated successfully');
+      // Write order + sales counter atomically to prevent partial updates.
+      const result = await placeOrderTransaction(orderData as Order);
 
+      if (result && typeof result === 'object' && 'ok' in result && result.ok) {
         // Clear fields and close modal
         handleCloseOrderModal();
         
         // Show success message
         showSuccess(`Order placed successfully for ${customerName}`);
       } else {
-        // Show error message
-        showError('Failed to place order. Please try again.');
+        const err = handleServiceError(result, 'placeOrderTransaction');
+        showError(err.message || 'Failed to place order. Please try again.');
       }
     } catch (e) {
       console.error('Error placing order:', e);
