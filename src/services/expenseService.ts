@@ -1,5 +1,5 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, query, where, addDoc } from '@react-native-firebase/firestore';
+import { FirebaseFirestoreTypes, getFirestore, collection, getDocs, query, where, addDoc } from '@react-native-firebase/firestore';
 import { getISTDate, getISTStartOfDay, getISTDaysAgo, getISTMonthStart, getISTMonthEnd } from '../utils/dateUtils';
 import type { Expense } from '../types';
 

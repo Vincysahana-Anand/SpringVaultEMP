@@ -3,8 +3,12 @@ import {
   getFirestore,
   collection,
   doc,
+  getDocs,
+  limit,
   orderBy,
+  query,
   runTransaction,
+  where,
 } from '@react-native-firebase/firestore';
 import { Order } from '../types';
 import { getISTDate, formatDateKey } from '../utils/dateUtils';
@@ -16,6 +20,35 @@ export type { Order } from '../types';
 const ordersRepo = createRepository<Order>('orders', [orderBy('timeStamp', 'asc')] as any);
 
 export const getOrders = () => ordersRepo.getAll();
+
+/**
+ * Fetch only the pending order for a specific customer + product pair.
+ * This avoids scanning the full orders collection on every order submit.
+ */
+export const getPendingOrderByCustomerAndProduct = async (
+  customerId: string,
+  productId: string,
+): Promise<Order | null | ServiceError> => {
+  try {
+    const db = getFirestore();
+    const pendingOrderQuery = query(
+      collection(db, 'orders'),
+      where('customerId', '==', customerId),
+      where('productId', '==', productId),
+      limit(1),
+    );
+
+    const snapshot = await getDocs(pendingOrderQuery);
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const first = snapshot.docs[0];
+    return { id: first.id, ...(first.data() as Order) };
+  } catch (error) {
+    return handleServiceError(error, 'getPendingOrderByCustomerAndProduct');
+  }
+};
 
 export const addOrder = async (order: Order): Promise<true | ServiceError> => {
   const result = await ordersRepo.add(order);

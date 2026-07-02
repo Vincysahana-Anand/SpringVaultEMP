@@ -9,6 +9,7 @@
     "start": "react-native start",
     "test": "jest",
     "backup:firestore": "node scripts/export-firestore-backup.js",
+    "deploy:firestore:indexes": "firebase deploy --only firestore:indexes",
     "migrate:firestore:dry-run": "node scripts/firestore-production-migration.js --mode=dry-run",
     "migrate:firestore:execute": "node scripts/firestore-production-migration.js --mode=execute",
     "migrate:firestore:verify": "node scripts/firestore-production-migration.js --mode=verify"

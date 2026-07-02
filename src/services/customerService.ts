@@ -1,5 +1,5 @@
 import { handleServiceError, ServiceError } from './serviceErrorWrapper';
-import firestore, { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, query, where, orderBy, startAt, endAt, addDoc, updateDoc, deleteDoc, doc } from '@react-native-firebase/firestore';
+import { FirebaseFirestoreTypes, getFirestore, collection, getDocs, getDoc, query, where, orderBy, startAt, endAt, addDoc, updateDoc, deleteDoc, doc } from '@react-native-firebase/firestore';
 import type { Customer } from '../types';
 
 export type { Customer } from '../types';

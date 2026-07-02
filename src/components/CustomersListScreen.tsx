@@ -18,7 +18,7 @@ import {
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { getCustomers, Customer } from '../services/customerService';
 import { getStocks, Stock } from '../services/stockService';
-import { getOrders, placeOrderTransaction, Order } from '../services/orderService';
+import { getPendingOrderByCustomerAndProduct, placeOrderTransaction, Order } from '../services/orderService';
 import { handleServiceError } from '../services/serviceErrorWrapper';
 import { currencyINR } from '../utils/format';
 import { getISTDate } from '../utils/dateUtils';
@@ -256,26 +256,33 @@ export default function CustomersListScreen({
     try {
       setSubmittingOrder(true);
 
+      if (!orderCustomer.id) {
+        showError('Customer not found. Please refresh and try again.');
+        setSubmittingOrder(false);
+        return;
+      }
+
       const customerName = orderCustomer.name;
       const selectedProductId = orderProduct.id;
       
-      // Check for existing orders for this customer
-      const ordersResult = await getOrders();
-      
-      if (Array.isArray(ordersResult)) {
-        const existingOrder = ordersResult.find((order: Order) => {
-          return order.customerId === orderCustomer.id && order.productId === selectedProductId;
-        });
-        
-        if (existingOrder) {
-          setSubmittingOrder(false);
-          handleCloseOrderModal();
-          showInfo(
-            `An order is already pending for ${customerName}. Product: ${existingOrder.productName} (Qty: ${existingOrder.quantity})`,
-            { title: 'Order Already Pending', durationMs: 3500 }
-          );
-          return;
-        }
+      // Check for an existing pending order for the same customer + product.
+      const existingOrderResult = await getPendingOrderByCustomerAndProduct(orderCustomer.id, selectedProductId);
+      if (existingOrderResult && typeof existingOrderResult === 'object' && 'code' in existingOrderResult) {
+        const err = handleServiceError(existingOrderResult, 'getPendingOrderByCustomerAndProduct');
+        showError(err.message);
+        setSubmittingOrder(false);
+        return;
+      }
+
+      const existingOrder = existingOrderResult as Order | null;
+      if (existingOrder) {
+        setSubmittingOrder(false);
+        handleCloseOrderModal();
+        showInfo(
+          `An order is already pending for ${customerName}. Product: ${existingOrder.productName} (Qty: ${existingOrder.quantity})`,
+          { title: 'Order Already Pending', durationMs: 3500 }
+        );
+        return;
       }
       
       // Format timestamp in IST

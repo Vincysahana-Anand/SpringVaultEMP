@@ -100,6 +100,7 @@ npm run ios
 - npm test: run tests
 - npm run lint: run lint checks
 - npm run backup:firestore: export Firestore backup JSON
+- npm run deploy:firestore:indexes: deploy Firestore indexes from firestore.indexes.json
 - npm run migrate:firestore:dry-run: scan and preview history migration without writes
 - npm run migrate:firestore:execute: apply history migration to production schema
 - npm run migrate:firestore:verify: verify no legacy history arrays remain
@@ -115,3 +116,4 @@ npm run ios
 
 - Architecture and data model: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Refinement notes: [ARCHITECTURE_REFINEMENTS.md](ARCHITECTURE_REFINEMENTS.md)
+- Firestore index setup: [docs/FIRESTORE_INDEX_CHECKLIST.md](docs/FIRESTORE_INDEX_CHECKLIST.md)

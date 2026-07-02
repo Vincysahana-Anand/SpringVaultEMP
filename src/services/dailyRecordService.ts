@@ -28,6 +28,8 @@ export type DailyRecordPage = {
   hasMore: boolean;
 };
 
+type DailyRecordCustomerCache = Map<string, Record<string, unknown> | null>;
+
 type PersistedDailyRecordEntry = DailyRecordEntry & { createdAt?: unknown };
 
 const toMillis = (value: unknown): number => {
@@ -103,9 +105,15 @@ export const getDailyRecordsByDate = async (
   try {
     let cursor: DailyRecordCursor = null;
     const entries: DailyRecordEntry[] = [];
+    const customerCache: DailyRecordCustomerCache = new Map();
 
     while (true) {
-      const page = await getDailyRecordsByDatePage(date, DEFAULT_DAILY_RECORD_PAGE_SIZE, cursor);
+      const page = await getDailyRecordsByDatePage(
+        date,
+        DEFAULT_DAILY_RECORD_PAGE_SIZE,
+        cursor,
+        customerCache,
+      );
       if (!('entries' in page)) {
         return page;
       }
@@ -128,6 +136,7 @@ export const getDailyRecordsByDatePage = async (
   date: string,
   pageSize = DEFAULT_DAILY_RECORD_PAGE_SIZE,
   cursor: DailyRecordCursor = null,
+  customerCache: DailyRecordCustomerCache = new Map(),
 ): Promise<DailyRecordPage | ServiceError> => {
   try {
     const db = getFirestore();
@@ -148,7 +157,7 @@ export const getDailyRecordsByDatePage = async (
       const entries = snapshot.docs.map(
         (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
       );
-      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries, customerCache);
       const lastDoc = snapshot.docs.length > 0
         ? snapshot.docs[snapshot.docs.length - 1]
         : null;
@@ -168,7 +177,7 @@ export const getDailyRecordsByDatePage = async (
 
       const fallbackEntries = await getDailyRecordFallbackEntriesByDate(db, date);
       const sorted = sortByCreatedAtDesc(fallbackEntries).slice(0, cappedPageSize);
-      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, sorted);
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, sorted, customerCache);
 
       return {
         entries: hydrated,
@@ -187,6 +196,7 @@ export const getDailyRecordPage = async (
   date: string,
   pageSize = DEFAULT_DAILY_RECORD_PAGE_SIZE,
   cursor: DailyRecordCursor = null,
+  customerCache: DailyRecordCustomerCache = new Map(),
 ): Promise<DailyRecordPage | ServiceError> => {
   try {
     const db = getFirestore();
@@ -211,7 +221,7 @@ export const getDailyRecordPage = async (
       const entries = snapshot.docs.map(
         (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
       );
-      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries);
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, entries, customerCache);
       const lastDoc = snapshot.docs.length > 0
         ? snapshot.docs[snapshot.docs.length - 1]
         : null;
@@ -238,7 +248,7 @@ export const getDailyRecordPage = async (
         (docSnap: FirebaseFirestoreTypes.QueryDocumentSnapshot) => docSnap.data() as DailyRecordEntry,
       );
       const sorted = sortByCreatedAtDesc(fallbackEntries).slice(0, cappedPageSize);
-      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, sorted);
+      const hydrated = await hydrateDailyRecordEntriesWithCustomerData(db, sorted, customerCache);
 
       return {
         entries: hydrated,
